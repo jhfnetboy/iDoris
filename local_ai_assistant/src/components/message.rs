@@ -4,13 +4,13 @@
 
 use comrak::{markdown_to_html_with_plugins, ExtensionOptions, Plugins, RenderOptions, RenderPlugins};
 use comrak::plugins::syntect::SyntectAdapterBuilder;
-use crate::models::{ChatMessage, ChatRole};
+use crate::models::{ChatMessage, ChatRole, AppSettings};
 use dioxus::prelude::*;
 
 /// Message component for rendering individual chat messages
 /// Uses index-based access to maintain reactivity with the parent's Signal<Vec<ChatMessage>>
 #[component]
-pub fn Message(messages: Signal<Vec<ChatMessage>>, index: usize) -> Element {
+pub fn Message(messages: Signal<Vec<ChatMessage>>, index: usize, settings: Signal<AppSettings>) -> Element {
     // Read the message reactively by accessing the signal
     let is_assistant = use_memo(move || {
         messages.read().get(index).map(|m| m.role == ChatRole::Assistant).unwrap_or(false)
@@ -111,16 +111,22 @@ pub fn Message(messages: Signal<Vec<ChatMessage>>, index: usize) -> Element {
                             }
                         }
                     } else {
-                        // Render the processed HTML content
-                        div {
-                            class: "prose prose-invert prose-sm max-w-none",
-                            class: "[&_pre]:bg-slate-800/80 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-2 [&_pre]:overflow-x-auto",
-                            class: "[&_code]:bg-slate-800/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-emerald-400 [&_code]:text-sm",
-                            class: "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
-                            class: "[&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5",
-                            class: "[&_a]:text-blue-400 [&_a:hover]:text-blue-300",
-                            class: "[&_strong]:text-white [&_em]:text-slate-300",
-                            dangerous_inner_html: content
+                        // Render the processed HTML content with dynamic font size
+                        {
+                            let font_style = settings.read().font_size.font_style();
+                            rsx! {
+                                div {
+                                    class: "prose prose-invert max-w-none",
+                                    class: "[&_pre]:bg-slate-800/80 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-2 [&_pre]:overflow-x-auto",
+                                    class: "[&_code]:bg-slate-800/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-emerald-400 [&_code]:text-sm",
+                                    class: "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
+                                    class: "[&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5",
+                                    class: "[&_a]:text-blue-400 [&_a:hover]:text-blue-300",
+                                    class: "[&_strong]:text-white [&_em]:text-slate-300",
+                                    style: "{font_style}",
+                                    dangerous_inner_html: content
+                                }
+                            }
                         }
                     }
                 }

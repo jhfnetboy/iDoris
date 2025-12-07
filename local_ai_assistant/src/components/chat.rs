@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 use dioxus::html::input_data::keyboard_types::Key;
-use crate::models::{ChatMessage, ChatRole, Session};
+use crate::models::{ChatMessage, ChatRole, Session, AppSettings};
 use crate::server_functions::{get_response, reset_chat, search_context, init_llm_model, init_embedding_model, init_db};
 use super::Message;
 
@@ -25,8 +25,10 @@ struct ChatState {
 pub fn Chat(
     messages: Signal<Vec<ChatMessage>>,
     current_session: Signal<Option<Session>>,
+    sessions: Signal<Vec<Session>>,
     is_loading: Signal<bool>,
     model_ready: Signal<bool>,
+    settings: Signal<AppSettings>,
 ) -> Element {
     let mut state = use_signal(|| ChatState {
         input_message: String::new(),
@@ -75,7 +77,8 @@ pub fn Chat(
                                 Message {
                                     key: "{msg.id}",
                                     messages: messages,
-                                    index: index
+                                    index: index,
+                                    settings: settings,
                                 }
                             }
                         }
@@ -84,7 +87,7 @@ pub fn Chat(
             }
 
             // Input area - fixed at bottom
-            { render_input_area(&state, &messages, &current_session) }
+            { render_input_area(&state, &messages, &current_session, &sessions, &settings) }
         }
     }
 }
@@ -244,6 +247,8 @@ fn render_input_area(
     state: &Signal<ChatState>,
     messages: &Signal<Vec<ChatMessage>>,
     current_session: &Signal<Option<Session>>,
+    sessions: &Signal<Vec<Session>>,
+    settings: &Signal<AppSettings>,
 ) -> Element {
     let current_state = state.read();
     let is_disabled = current_state.is_model_answering ||
@@ -356,12 +361,14 @@ fn render_input_area(
                                 let state = state.clone();
                                 let messages = messages.clone();
                                 let session = current_session.clone();
+                                let sessions = sessions.clone();
+                                let settings = settings.clone();
                                 move |event| {
                                     if event.key() == Key::Enter && !event.modifiers().shift() {
                                         event.prevent_default();
                                         let current = state.read().clone();
                                         if !current.input_message.trim().is_empty() {
-                                            spawn(handle_message_send(state.clone(), messages.clone(), session.clone()));
+                                            spawn(handle_message_send(state.clone(), messages.clone(), session.clone(), sessions.clone(), settings.clone()));
                                         }
                                     }
                                 }
@@ -383,8 +390,10 @@ fn render_input_area(
                             let state = state.clone();
                             let messages = messages.clone();
                             let session = current_session.clone();
+                            let sessions = sessions.clone();
+                            let settings = settings.clone();
                             move |_| {
-                                spawn(handle_message_send(state.clone(), messages.clone(), session.clone()));
+                                spawn(handle_message_send(state.clone(), messages.clone(), session.clone(), sessions.clone(), settings.clone()));
                             }
                         },
 
@@ -484,7 +493,9 @@ fn initialize_embedding_model() {
 async fn handle_message_send(
     mut state: Signal<ChatState>,
     mut messages: Signal<Vec<ChatMessage>>,
-    current_session: Signal<Option<Session>>,
+    mut current_session: Signal<Option<Session>>,
+    mut sessions: Signal<Vec<Session>>,
+    settings: Signal<AppSettings>,
 ) {
     let current_state = state.read().clone();
     let session = current_session();
@@ -505,12 +516,23 @@ async fn handle_message_send(
         return;
     }
 
-    // Auto-create session if none exists
+    // Auto-create session if none exists and add to sidebar history
     let session = match session {
         Some(s) => s,
         None => {
-            // Create a default session automatically
-            Session::default_title()
+            // Generate session title from first message (truncate if too long)
+            let first_msg = current_state.input_message.trim();
+            let title = if first_msg.len() > 30 {
+                format!("{}...", &first_msg[..27])
+            } else {
+                first_msg.to_string()
+            };
+            let new_session = Session::new(title);
+            // Add to sessions list so it appears in sidebar
+            sessions.write().insert(0, new_session.clone());
+            // Set as current session
+            current_session.set(Some(new_session.clone()));
+            new_session
         }
     };
 
@@ -523,22 +545,39 @@ async fn handle_message_send(
     new_state.input_message = String::new();
     state.set(new_state);
 
-    process_response(state.clone(), messages.clone(), user_message);
+    // Get language instruction from settings
+    let language_instruction = {
+        let settings_guard = settings.read();
+        settings_guard.language.prompt_instruction().to_string()
+    };
+
+    process_response(state.clone(), messages.clone(), user_message, language_instruction);
 }
 
-fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatMessage>>, mut user_message: String) {
+fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatMessage>>, user_message: String, language_instruction: String) {
     spawn(async move {
         #[cfg(target_arch = "wasm32")]
         web_sys::console::log_1(&"[WASM] process_response started".into());
 
         let use_context_enabled = state.read().use_context;
 
+        // Build a more substantial prompt for short messages to ensure model responds
+        // Qwen 2.5 1.5B sometimes returns empty for very short greetings
+        let enhanced_message = if user_message.trim().len() < 10 {
+            format!("User says: '{}'. Please respond appropriately.", user_message)
+        } else {
+            user_message.clone()
+        };
+
+        // Prepend language instruction to the message
+        let mut final_message = format!("{} {}", language_instruction, enhanced_message);
+
         // Get relevant context when enabled
         if use_context_enabled {
             match search_context(user_message.clone()).await {
                 Ok(context) => {
                     let context_string = format!("\n\n[Potentially useful context:\n{}]", context);
-                    user_message.push_str(&context_string);
+                    final_message.push_str(&context_string);
                 },
                 Err(e) => {
                     #[cfg(target_arch = "wasm32")]
@@ -548,10 +587,10 @@ fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatM
         }
 
         #[cfg(target_arch = "wasm32")]
-        web_sys::console::log_1(&format!("[WASM] Calling get_response with: {}", user_message).into());
+        web_sys::console::log_1(&format!("[WASM] Calling get_response with: {}", final_message).into());
 
         // Get and process response stream
-        match get_response(user_message).await {
+        match get_response(final_message).await {
             Ok(mut stream) => {
                 #[cfg(target_arch = "wasm32")]
                 web_sys::console::log_1(&"[WASM] Got stream, starting to consume".into());
@@ -597,6 +636,10 @@ fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatM
         current_state.is_model_answering = false;
         state.set(current_state);
 
+        // Refocus the input after response is complete
+        #[cfg(target_arch = "wasm32")]
+        focus_input();
+
         #[cfg(target_arch = "wasm32")]
         web_sys::console::log_1(&"[WASM] process_response finished".into());
     });
@@ -614,3 +657,17 @@ fn scroll_to_bottom() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn scroll_to_bottom() {}
+
+#[cfg(target_arch = "wasm32")]
+fn focus_input() {
+    let window = web_sys::window().expect("no window");
+    let document = window.document().expect("no document");
+    if let Some(element) = document.get_element_by_id("message-input") {
+        if let Ok(input) = element.dyn_into::<web_sys::HtmlElement>() {
+            let _ = input.focus();
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn focus_input() {}
