@@ -1,0 +1,24 @@
+# Build artifacts
+/target/
+/dist/
+
+# Model files (large binaries)
+/models/*.gguf
+/models/*.bin
+
+# Database files
+/data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local

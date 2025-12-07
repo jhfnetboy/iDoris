@@ -1,0 +1,25 @@
+# Local AI Assistant Configuration
+
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[llm]
+model_path = "./models/qwen2.5-7b-instruct-q4_k_m.gguf"
+context_size = 4096
+temperature = 0.7
+top_p = 0.9
+max_tokens = 2048
+gpu_layers = 0  # 0 = CPU only, increase for GPU acceleration
+
+[embedding]
+model_name = "BAAI/bge-small-en-v1.5"
+
+[rag]
+knowledge_dir = "./context"
+chunk_size = 512
+chunk_overlap = 50
+top_k = 5
+
+[database]
+path = "./data/assistant.db"

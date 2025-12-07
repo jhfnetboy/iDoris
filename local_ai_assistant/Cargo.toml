@@ -1,0 +1,63 @@
+[package]
+name = "local_ai_assistant"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Your Name <your@email.com>"]
+description = "A cross-platform local AI assistant with RAG support"
+
+[dependencies]
+dioxus = { version = "0.7.2", features = ["fullstack"] }
+tokio = { version = "1.45", features = ["full"] }
+futures = "0.3"
+server_fn = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Web dependencies
+web-sys = "0.3"
+wasm-bindgen = "0.2"
+
+# Markdown rendering
+comrak = "0.39"
+
+# Server-only dependencies
+llama-cpp-2 = { version = "0.1", optional = true }
+lancedb = { version = "0.15", optional = true }
+fastembed = { version = "4", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+config = { version = "0.14", optional = true }
+toml = { version = "0.8", optional = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", optional = true }
+anyhow = "1.0"
+thiserror = "2.0"
+
+[features]
+default = []
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+server = [
+    "dioxus/server",
+    "dep:llama-cpp-2",
+    "dep:lancedb",
+    "dep:fastembed",
+    "dep:rusqlite",
+    "dep:config",
+    "dep:toml",
+    "dep:tracing-subscriber"
+]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.release]
+lto = true
+opt-level = 3

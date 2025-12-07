@@ -1,0 +1,23 @@
+[application]
+name = "local_ai_assistant"
+default_platform = "web"
+
+[web.app]
+title = "Local AI Assistant"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src", "assets"]
+
+[web.resource]
+dev = "assets"
+style = ["assets/tailwind.css"]
+
+[[web.proxy]]
+backend = "http://localhost:8080"
+
+[server]
+port = 8080
+
+[server.watcher]
+watch_path = ["src"]
