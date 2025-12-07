@@ -1,74 +1,285 @@
-//! Vector Store Module
+//! Database Implementation
 //!
-//! Handles vector storage and retrieval using LanceDB.
+//! This module provides the core database functionality for the application,
+//! including connection management, document storage, and semantic search capabilities.
+//! It leverages SurrealDB for document storage and kalosm for embedding-based search.
 
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
-use anyhow::Result;
-use crate::models::Document;
+use kalosm::EmbeddingIndexedTableSearchResult;
+use kalosm::language::*;
+use kalosm::language::Embedding;
+use tokio::sync::{Mutex, OnceCell};
+use surrealdb::Surreal;
+use surrealdb::engine::local::{Db, SurrealKv};
+use crate::models::Document as SimpleDocument;
+use std::path::PathBuf;
 
-static VECTOR_STORE: OnceLock<Mutex<Option<VectorStore>>> = OnceLock::new();
+/// Global singleton for the database connection
+/// Uses OnceCell and Mutex for thread-safe access and initialization
+static DB_CONN: OnceCell<Mutex<Option<Surreal<Db>>>> = OnceCell::const_new();
 
-pub struct VectorStore {
-    // TODO: Add LanceDB connection handle
-    _initialized: bool,
+/// Global singleton for the document table
+/// Stores documents with embedding-based search capabilities
+static DOCUMENT_TABLE: OnceCell<Mutex<Option<DocumentTable<Db>>>> = OnceCell::const_new();
+
+/// Constants for database configuration
+const DB_PATH: &str = "./db";
+const DB_FILE: &str = "./db/temp.db";
+const EMBEDDINGS_FILE: &str = "./db/embeddings.db";
+const NAMESPACE: &str = "test";
+const DATABASE: &str = "test";
+const TABLE_NAME: &str = "documents";
+const CONTEXT_FOLDER: &str = "./context";
+
+/// Establishes a connection to the database and initializes the document table
+///
+/// This function coordinates the entire database setup process.
+///
+/// Returns Ok(()) on success or an error message on failure
+pub async fn connect_to_database() -> Result<(), String> {
+    // Initialize global singletons
+    initialize_globals().await;
+
+    // Clean old database files
+    cleanup_database_files()?;
+
+    // Connect to database
+    let db = create_database_connection().await?;
+
+    // Configure namespace and database
+    configure_database(&db).await?;
+
+    // Create document table
+    let dt = create_document_table(&db).await?;
+
+    // Store connections in singletons
+    store_connections(db, dt).await;
+
+    // Add documents to the database
+    add_documents().await?;
+
+    println!("Database connection setup completed successfully");
+    Ok(())
 }
 
-pub struct VectorStoreConfig {
-    pub db_path: String,
-    pub table_name: String,
+/// Initializes the global OnceCell singletons with empty values
+async fn initialize_globals() {
+    DB_CONN.get_or_init(|| async { Mutex::new(None) }).await;
+    DOCUMENT_TABLE.get_or_init(|| async { Mutex::new(None) }).await;
 }
 
-impl Default for VectorStoreConfig {
-    fn default() -> Self {
-        Self {
-            db_path: "./data/vectors".to_string(),
-            table_name: "documents".to_string(),
-        }
+/// Cleans up existing database files
+fn cleanup_database_files() -> Result<(), String> {
+    let db_path = PathBuf::from(DB_PATH);
+    if db_path.exists() {
+        std::fs::remove_dir_all(&db_path).map_err(|e| {
+            eprintln!("Error removing existing database: {}", e);
+            e.to_string()
+        })?;
+        println!("Removed existing database files");
+    } else {
+        println!("No existing database found, creating a new one");
+    }
+    Ok(())
+}
+
+/// Creates a new database connection
+async fn create_database_connection() -> Result<Surreal<Db>, String> {
+    println!("Connecting to the database...");
+    let db = Surreal::new::<SurrealKv>(DB_FILE)
+        .await
+        .map_err(|e| e.to_string())?;
+    println!("Database connected successfully");
+    Ok(db)
+}
+
+/// Configures the namespace and database settings
+async fn configure_database(db: &Surreal<Db>) -> Result<(), String> {
+    db.use_ns(NAMESPACE).use_db(DATABASE)
+        .await
+        .map_err(|e| {
+            eprintln!("Error using namespace and database: {}", e);
+            e.to_string()
+        })
+}
+
+/// Creates the document table with semantic chunking
+async fn create_document_table(db: &Surreal<Db>) -> Result<DocumentTable<Db>, String> {
+    println!("Creating document table...");
+    let dt = db.document_table_builder(TABLE_NAME)
+        .with_chunker(SemanticChunker::default())
+        .at(EMBEDDINGS_FILE)
+        .build::<Document>()
+        .await
+        .map_err(|e| {
+            eprintln!("Error creating document table: {}", e);
+            e.to_string()
+        })?;
+    println!("Document table created successfully");
+    Ok(dt)
+}
+
+/// Stores database connections in the global singletons
+async fn store_connections(db: Surreal<Db>, dt: DocumentTable<Db>) {
+    {
+        let mut db_guard = DB_CONN.get().unwrap().lock().await;
+        *db_guard = Some(db);
+    }
+
+    {
+        let mut dt_guard = DOCUMENT_TABLE.get().unwrap().lock().await;
+        *dt_guard = Some(dt);
     }
 }
 
-/// Initialize the vector store
-pub async fn init() -> Result<()> {
-    let config = VectorStoreConfig::default();
-    println!("Initializing vector store: {}", config.db_path);
+/// Loads documents from the context folder and adds them to the document table
+///
+/// Returns Ok(()) on success or an error message on failure
+async fn add_documents() -> Result<(), String> {
+    println!("Adding documents to the table...");
 
-    // TODO: Initialize LanceDB
-    // let db = lancedb::connect(&config.db_path).await?;
+    // Check if context folder exists
+    let context_path = PathBuf::from(CONTEXT_FOLDER);
+    if !context_path.exists() {
+        println!("Context folder does not exist, creating it...");
+        std::fs::create_dir_all(&context_path).map_err(|e| e.to_string())?;
+        // Create a sample document
+        std::fs::write(context_path.join("sample.md"), "# Sample Document\n\nThis is a sample document for RAG testing.")
+            .map_err(|e| e.to_string())?;
+    }
 
-    let store = VectorStore {
-        _initialized: true,
-    };
+    // Load documents from folder
+    let raw_documents = load_documents_from_folder(CONTEXT_FOLDER)?;
 
-    VECTOR_STORE.get_or_init(|| Mutex::new(Some(store)));
-    println!("Vector store initialized successfully");
+    // Get document table reference
+    let table = get_document_table().await?;
+
+    // Process documents
+    let documents = process_documents(raw_documents).await?;
+
+    // Insert documents into table
+    insert_documents(&table, documents).await?;
+
+    println!("All documents added successfully");
     Ok(())
 }
 
-/// Check if the vector store is initialized
+/// Loads documents from the specified folder path
+fn load_documents_from_folder(folder_path: &str) -> Result<DocumentFolder, String> {
+    DocumentFolder::try_from(PathBuf::from(folder_path))
+        .map_err(|e| format!("Error loading documents from folder: {}", e))
+}
+
+/// Processes raw documents into Document objects
+async fn process_documents(document_folder: DocumentFolder) -> Result<Vec<Document>, String> {
+    document_folder.into_documents().await
+        .map_err(|e| format!("Error processing documents: {}", e))
+        .map(|docs| {
+            docs.into_iter()
+                .map(|doc| {
+                    let title = doc.body().lines().next().unwrap_or("Unknown").to_string();
+                    let body = doc.body().to_string();
+                    Document::from_parts(title, body)
+                })
+                .collect()
+        })
+}
+
+/// Inserts multiple documents into the document table
+async fn insert_documents(table: &DocumentTable<Db>, documents: Vec<Document>) -> Result<(), String> {
+    for document in documents {
+        insert_single_document(table, document).await?;
+    }
+    Ok(())
+}
+
+/// Inserts a single document into the document table
+async fn insert_single_document(table: &DocumentTable<Db>, document: Document) -> Result<(), String> {
+    table.insert(document).await
+        .map_err(|e| {
+            eprintln!("Error adding document: {}", e);
+            e.to_string()
+        })?;
+    Ok(())
+}
+
+/// Gets a reference to the document table from the global singleton
+async fn get_document_table() -> Result<impl std::ops::Deref<Target = DocumentTable<Db>> + 'static, String> {
+    let document_table_mutex_ref = DOCUMENT_TABLE
+        .get()
+        .ok_or("Document table not initialized")?;
+
+    let table_guard = document_table_mutex_ref.lock().await;
+    if table_guard.is_none() {
+        return Err("Document table is None".to_string());
+    }
+
+    Ok(tokio::sync::MutexGuard::map(table_guard, |t| {
+        t.as_mut().unwrap()
+    }))
+}
+
+/// Performs a semantic search query against the document database
+///
+/// # Parameters
+/// * `query` - The search query text
+///
+/// # Returns
+/// * `Result<Vec<SimpleDocument>, String>` - A vector of matching document results or an error
+pub async fn query(query: &str) -> Result<Vec<SimpleDocument>, String> {
+    // Get document table
+    let table = get_document_table().await?;
+
+    // Create embedding from query
+    let query_embed = create_embedding_from_query(&table, query).await?;
+
+    // Perform semantic search
+    let results = perform_semantic_search(&table, query_embed).await?;
+
+    // Convert results to SimpleDocument
+    Ok(convert_search_results(results))
+}
+
+/// Creates an embedding vector from the query text
+async fn create_embedding_from_query(
+    table: &DocumentTable<Db>,
+    query: &str
+) -> Result<Embedding, String> {
+    table.embedding_model().embed(query).await.map_err(|e| {
+        eprintln!("Error creating embedding: {}", e);
+        e.to_string()
+    })
+}
+
+/// Performs semantic search using the embedding vector
+async fn perform_semantic_search(
+    table: &DocumentTable<Db>,
+    query_embed: Embedding
+) -> Result<Vec<EmbeddingIndexedTableSearchResult<Document>>, String> {
+    table.search(query_embed)
+        .with_results(1)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Converts search results to SimpleDocument objects
+fn convert_search_results(
+    results: Vec<EmbeddingIndexedTableSearchResult<Document>>
+) -> Vec<SimpleDocument> {
+    results.into_iter().map(|doc_result| {
+        SimpleDocument {
+            title: doc_result.record.title().to_string(),
+            body: doc_result.record.body().to_string(),
+            score: doc_result.distance,
+        }
+    }).collect()
+}
+
+/// Initialize the vector store (wrapper for connect_to_database)
+pub async fn init() -> Result<(), anyhow::Error> {
+    connect_to_database().await.map_err(|e| anyhow::anyhow!(e))
+}
+
+/// Check if vector store is initialized
 pub fn is_initialized() -> bool {
-    VECTOR_STORE.get()
-        .map(|m| m.try_lock().map(|g| g.is_some()).unwrap_or(false))
-        .unwrap_or(false)
-}
-
-/// Insert documents into the vector store
-pub async fn insert(documents: Vec<Document>) -> Result<()> {
-    println!("Inserting {} documents into vector store", documents.len());
-    // TODO: Implement actual insertion
-    Ok(())
-}
-
-/// Search for similar documents
-pub async fn search(query_embedding: &[f32], top_k: usize) -> Result<Vec<Document>> {
-    println!("Searching for {} similar documents", top_k);
-    // TODO: Implement actual search
-    Ok(vec![])
-}
-
-/// Delete all documents
-pub async fn clear() -> Result<()> {
-    println!("Clearing vector store");
-    // TODO: Implement actual deletion
-    Ok(())
+    DOCUMENT_TABLE.get().is_some()
 }

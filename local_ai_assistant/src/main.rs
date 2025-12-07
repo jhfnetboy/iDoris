@@ -1,6 +1,7 @@
 //! Local AI Assistant - Main Entry Point
 //!
 //! A cross-platform local AI assistant with RAG support.
+//! Based on rusty_bot architecture with session management.
 
 use dioxus::prelude::*;
 
@@ -9,22 +10,34 @@ mod models;
 
 #[cfg(feature = "server")]
 mod core;
-#[cfg(feature = "server")]
-mod services;
-#[cfg(feature = "server")]
-mod storage;
-#[cfg(feature = "server")]
-mod config;
 
 mod server_functions;
 
+/// Static resources used by the application
+/// Favicon that will appear in the browser tab
+const FAVICON: Asset = asset!("/assets/favicon.ico");
+
+/// Main function that launches the Dioxus application
 fn main() {
     dioxus::launch(App);
 }
 
+/// Root component of the application.
+///
+/// This component defines the basic structure of the HTML document,
+/// including:
+/// - Links to resources such as favicon and CSS styles
+/// - Page body with dark background
+/// - The main App component that handles the interface
 #[component]
 fn App() -> Element {
     rsx! {
-        components::App {}
+        document::Link { rel: "icon", href: FAVICON }
+        // Use Tailwind CDN for complete class support
+        script { src: "https://cdn.tailwindcss.com" }
+        body {
+            class: "bg-slate-900 text-white",
+            components::App {}
+        }
     }
 }

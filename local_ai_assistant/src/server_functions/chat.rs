@@ -1,18 +1,25 @@
 //! Chat Server Functions
+//!
+//! This module contains Dioxus server functions for chat functionality.
+//! It leverages Dioxus server functions to bridge client-server communication.
 
 use dioxus::prelude::*;
-
-#[cfg(feature = "server")]
 use dioxus::fullstack::TextStream;
 
-/// Initializes the LLM model
+/// Initializes the language model for chat functionality.
+///
+/// This server function loads and prepares the chat model for use.
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
 #[server]
 pub async fn init_llm_model() -> Result<(), ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::core::llm;
-        llm::init_model().await.map_err(|e| {
-            ServerFnError::new(&format!("Error initializing LLM: {}", e))
+        use crate::core::llm::init_chat_model;
+        init_chat_model().await.map_err(|e| {
+            ServerFnError::new(&format!("Error initializing model: {}", e))
         })
     }
     #[cfg(not(feature = "server"))]
@@ -21,14 +28,20 @@ pub async fn init_llm_model() -> Result<(), ServerFnError> {
     }
 }
 
-/// Initializes the embedding model
+/// Initializes the embedding model for text vectorization.
+///
+/// This server function loads and prepares the embedding model for use.
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
 #[server]
 pub async fn init_embedding_model() -> Result<(), ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::core::embedding;
-        embedding::init_model().await.map_err(|e| {
-            ServerFnError::new(&format!("Error initializing embedding: {}", e))
+        use crate::core::embedding::init_embedding_model as init_embed;
+        init_embed().await.map_err(|e| {
+            ServerFnError::new(&format!("Error initializing embedding model: {}", e))
         })
     }
     #[cfg(not(feature = "server"))]
@@ -37,15 +50,46 @@ pub async fn init_embedding_model() -> Result<(), ServerFnError> {
     }
 }
 
-/// Initializes the database
+/// Generates embedding vectors for the provided text.
+///
+/// # Arguments
+///
+/// * `txt` - The text to embed
+///
+/// # Returns
+///
+/// * `Result<Vec<f32>>` - Embedding vector or error message
 #[server]
-pub async fn init_database() -> Result<(), ServerFnError> {
+pub async fn get_embedding(txt: String) -> Result<Vec<f32>, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::storage::database;
-        database::init().await.map_err(|e| {
-            ServerFnError::new(&format!("Error initializing database: {}", e))
+        let result = tokio::task::spawn_blocking(move || {
+            futures::executor::block_on(crate::core::embedding::embed_text(&txt))
         })
+            .await
+            .map_err(|e| ServerFnError::new(&e.to_string()))?;
+
+        result.map_err(|e| ServerFnError::new(&format!("Error embedding text: {}", e)))
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(vec![])
+    }
+}
+
+/// Resets the current chat session.
+///
+/// Clears conversation history and resets the chat model's state.
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
+#[server]
+pub async fn reset_chat() -> Result<(), ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::core::llm::reset_chat as do_reset;
+        do_reset().await.map_err(|e| ServerFnError::new(&format!("Error trying to reset chat: {}", e)))
     }
     #[cfg(not(feature = "server"))]
     {
@@ -53,78 +97,113 @@ pub async fn init_database() -> Result<(), ServerFnError> {
     }
 }
 
-/// Generates a streaming response for a chat prompt
-#[cfg(feature = "server")]
-#[get("/api/chat?session_id&prompt")]
-pub async fn get_response(session_id: String, prompt: String) -> Result<TextStream> {
+/// Processes a user prompt and returns a streaming text response.
+///
+/// This function streams model responses token by token, allowing
+/// for real-time display to users.
+///
+/// # Arguments
+///
+/// * `prompt` - The user's input text
+///
+/// # Returns
+///
+/// * `Result<TextStream>` - Stream of response tokens or error
+#[get("/api/get_response?prompt")]
+pub async fn get_response(prompt: String) -> Result<TextStream> {
     use crate::core::llm;
     use futures::channel::mpsc;
+    use kalosm::language::StreamExt;
 
     let (tx, rx) = mpsc::unbounded();
 
-    if !llm::is_initialized() {
+    // Check if the model is initialized
+    if llm::CHAT_SESSION.get().is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Model not initialized"
         ).into());
     }
 
-    println!("[{}] Processing prompt: {}", session_id, prompt);
     let time = std::time::Instant::now();
+    println!("Processing prompt: {}", prompt);
 
-    let mut stream = llm::generate_stream(&prompt).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+    // Try to get a stream without restarting
+    let mut stream = llm::try_get_stream(&prompt).map_err(|e| {
+        std::io::Error::new(std::io::ErrorKind::Other, e)
     })?;
 
     tokio::spawn(async move {
-        use futures::StreamExt;
-        let _ = tx.unbounded_send(String::new());
+        let _ = tx.unbounded_send("".to_string());
+        // Consume the stream and send tokens to the channel
         while let Some(token) = stream.next().await {
             if tx.unbounded_send(token).is_err() {
+                println!("Error sending token");
                 break;
             }
         }
     });
 
-    println!("Response time: {:?}", time.elapsed());
+    println!("\nTotal response time: {:?}", time.elapsed());
     Ok(TextStream::new(rx))
 }
 
-/// Resets the chat session
+/// Searches the database for relevant context given a query.
+///
+/// Retrieves documents that match the query from the database.
+///
+/// # Arguments
+///
+/// * `q` - The search query
+///
+/// # Returns
+///
+/// * `Result<String>` - Formatted context string or error
 #[server]
-pub async fn reset_chat() -> Result<(), ServerFnError> {
+pub async fn search_context(q: String) -> Result<String, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::core::llm;
-        llm::reset_session().await.map_err(|e| {
-            ServerFnError::new(&format!("Error resetting chat: {}", e))
-        })
-    }
-    #[cfg(not(feature = "server"))]
-    {
-        Ok(())
-    }
-}
-
-/// Searches for relevant context using RAG
-#[server]
-pub async fn search_context(query: String) -> Result<String, ServerFnError> {
-    #[cfg(feature = "server")]
-    {
-        use crate::services::rag_service;
-        let documents = rag_service::search(&query).await.map_err(|e| {
-            ServerFnError::new(&format!("Error searching context: {}", e))
-        })?;
-
-        let context = documents.into_iter()
-            .map(|doc| format!("Title: {}\nBody: {}\n", doc.title, doc.body))
-            .collect::<Vec<_>>()
-            .join("\n");
-
+        println!("Searching context for query: {}", q);
+        let context = crate::core::vector_store::query(&q).await.map_err(|e| {
+            println!("Error querying database: {}", e);
+            ServerFnError::new(&format!("Error querying database: {}", e))
+        })?.into_iter()
+            .map(|document| {
+                format!(
+                    "Title: {}\nBody: {}\n",
+                    document.title,
+                    document.body
+                )
+            }).collect::<Vec<_>>().join("\n");
         Ok(context)
     }
     #[cfg(not(feature = "server"))]
     {
         Ok(String::new())
+    }
+}
+
+/// Initializes the database connection.
+///
+/// Must be called before any database operations can be performed.
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
+#[server]
+pub async fn init_db() -> Result<(), ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        crate::core::vector_store::connect_to_database()
+            .await
+            .map_err(|e| {
+                eprintln!("Error: {:?}", e);
+                ServerFnError::new(e)
+            })?;
+        Ok(())
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(())
     }
 }

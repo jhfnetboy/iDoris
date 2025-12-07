@@ -1,6 +1,6 @@
 //! Message Component
 //!
-//! Renders individual chat messages with Markdown support.
+//! Renders individual chat messages with Markdown support and modern styling.
 
 use comrak::{markdown_to_html_with_plugins, ExtensionOptions, Plugins, RenderOptions, RenderPlugins};
 use comrak::plugins::syntect::SyntectAdapterBuilder;
@@ -8,13 +8,24 @@ use crate::models::{ChatMessage, ChatRole};
 use dioxus::prelude::*;
 
 /// Message component for rendering individual chat messages
+/// Uses index-based access to maintain reactivity with the parent's Signal<Vec<ChatMessage>>
 #[component]
-pub fn Message(message: ChatMessage) -> Element {
-    let is_assistant = message.role == ChatRole::Assistant;
-    let is_empty = message.content.is_empty();
+pub fn Message(messages: Signal<Vec<ChatMessage>>, index: usize) -> Element {
+    // Read the message reactively by accessing the signal
+    let is_assistant = use_memo(move || {
+        messages.read().get(index).map(|m| m.role == ChatRole::Assistant).unwrap_or(false)
+    });
+
+    let is_empty = use_memo(move || {
+        messages.read().get(index).map(|m| m.role == ChatRole::Assistant && m.content.is_empty()).unwrap_or(false)
+    });
 
     // Process markdown content to HTML with syntax highlighting
     let content = use_memo(move || {
+        let msgs = messages.read();
+        let Some(message) = msgs.get(index) else {
+            return String::new();
+        };
         let msg_content = &message.content;
 
         if msg_content.is_empty() {
@@ -57,37 +68,61 @@ pub fn Message(message: ChatMessage) -> Element {
         markdown_to_html_with_plugins(msg_content, &options, &plugins)
     });
 
-    let message_class = "max-w-[70rem] p-4 mb-2 break-words";
-    let user_class = "self-end bg-blue-500 rounded-tl-lg rounded-tr-lg rounded-bl-lg text-white";
-    let assistant_class = "self-start max-w-full text-gray-200";
-
     rsx! {
         div {
-            class: "{message_class}",
-            class: if is_assistant { "{assistant_class}" } else { "{user_class}" },
-            class: if is_assistant && is_empty { "text-gray-400" },
+            class: "flex w-full mb-4",
+            class: if *is_assistant.read() { "justify-start" } else { "justify-end" },
 
-            if is_assistant && is_empty {
-                // Loading animation for empty assistant messages
+            div {
+                class: "flex items-start gap-3 max-w-[85%]",
+                class: if !*is_assistant.read() { "flex-row-reverse" },
+
+                // Avatar
                 div {
-                    class: "flex flex-col items-center justify-center min-h-[20px] w-full",
-                    div {
-                        class: "flex flex-row gap-1 justify-center items-center",
+                    class: "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium",
+                    class: if *is_assistant.read() { "bg-gradient-to-br from-emerald-500 to-teal-600" } else { "bg-gradient-to-br from-blue-500 to-indigo-600" },
+                    if *is_assistant.read() { "AI" } else { "U" }
+                }
+
+                // Message bubble
+                div {
+                    class: "px-4 py-3 rounded-2xl",
+                    class: if *is_assistant.read() {
+                        "bg-slate-700/50 text-slate-100 rounded-tl-sm"
+                    } else {
+                        "bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-tr-sm"
+                    },
+
+                    if *is_empty.read() {
+                        // Typing indicator for empty assistant messages
                         div {
-                            class: "w-2 h-2 rounded-full bg-gray-100 animate-bounce [animation-delay:.7s]"
+                            class: "flex items-center gap-1.5 py-1 px-2",
+                            div {
+                                class: "w-2 h-2 rounded-full bg-slate-400 animate-bounce",
+                                style: "animation-delay: 0ms;"
+                            }
+                            div {
+                                class: "w-2 h-2 rounded-full bg-slate-400 animate-bounce",
+                                style: "animation-delay: 150ms;"
+                            }
+                            div {
+                                class: "w-2 h-2 rounded-full bg-slate-400 animate-bounce",
+                                style: "animation-delay: 300ms;"
+                            }
                         }
+                    } else {
+                        // Render the processed HTML content
                         div {
-                            class: "w-2 h-2 rounded-full bg-gray-100 animate-bounce [animation-delay:.3s]"
-                        }
-                        div {
-                            class: "w-2 h-2 rounded-full bg-gray-100 animate-bounce [animation-delay:.7s]"
+                            class: "prose prose-invert prose-sm max-w-none",
+                            class: "[&_pre]:bg-slate-800/80 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:my-2 [&_pre]:overflow-x-auto",
+                            class: "[&_code]:bg-slate-800/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-emerald-400 [&_code]:text-sm",
+                            class: "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
+                            class: "[&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5",
+                            class: "[&_a]:text-blue-400 [&_a:hover]:text-blue-300",
+                            class: "[&_strong]:text-white [&_em]:text-slate-300",
+                            dangerous_inner_html: content
                         }
                     }
-                }
-            } else {
-                // Render the processed HTML content
-                div {
-                    dangerous_inner_html: content
                 }
             }
         }

@@ -4,52 +4,35 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Your Name <your@email.com>"]
-description = "A cross-platform local AI assistant with RAG support"
+description = "A cross-platform local AI assistant based on rusty_bot"
 
 [dependencies]
 dioxus = { version = "0.7.2", features = ["fullstack"] }
-tokio = { version = "1.45", features = ["full"] }
-futures = "0.3"
+kalosm = { git = "https://github.com/floneum/floneum", features = ["language", "surrealdb"], optional = true }
+tokio = "1.45.1"
+web-sys = { version = "0.3.77", features = ["console"] }
+gloo-net = { version = "0.6", features = ["http"] }
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4"
+wasm-bindgen = "0.2.100"
+futures = "0.3.31"
 server_fn = "0.7"
+comrak = "0.39.0"
+surrealdb = { version = "2.3.3", features = ["kv-surrealkv", "kv-mem"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Web dependencies
-web-sys = "0.3"
-wasm-bindgen = "0.2"
-
-# Markdown rendering
-comrak = "0.39"
-
-# Server-only dependencies
-llama-cpp-2 = { version = "0.1", optional = true }
-lancedb = { version = "0.15", optional = true }
-fastembed = { version = "4", optional = true }
-rusqlite = { version = "0.32", features = ["bundled"], optional = true }
-uuid = { version = "1.11", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-config = { version = "0.14", optional = true }
-toml = { version = "0.8", optional = true }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", optional = true }
 anyhow = "1.0"
-thiserror = "2.0"
+
+# Phase 1 additions for session persistence
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+uuid = { version = "1.11", features = ["v4", "serde", "js"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [features]
 default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = [
-    "dioxus/server",
-    "dep:llama-cpp-2",
-    "dep:lancedb",
-    "dep:fastembed",
-    "dep:rusqlite",
-    "dep:config",
-    "dep:toml",
-    "dep:tracing-subscriber"
-]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite"]
 
 [profile.wasm-dev]
 inherits = "dev"
@@ -58,6 +41,11 @@ opt-level = 1
 [profile.server-dev]
 inherits = "dev"
 
-[profile.release]
-lto = true
-opt-level = 3
+[profile.android-dev]
+inherits = "dev"
+
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-feature=-avx,-avx2"]

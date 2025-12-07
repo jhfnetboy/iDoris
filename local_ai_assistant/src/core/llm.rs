@@ -1,91 +1,118 @@
-//! LLM Engine Module
+//! Language Model Implementation
 //!
-//! Handles local LLM inference using llama-cpp.
+//! This module provides functionality for interacting with the large language model (LLM).
+//! It manages a singleton instance of the Llama chat model and provides methods for
+//! generating responses, streaming text output, and resetting conversation state.
 
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
-use anyhow::Result;
+use tokio::sync::OnceCell;
+use std::sync::Mutex;
+use kalosm::language::{Chat, ChatModelExt, IntoChatMessage, Llama};
 
-// Placeholder for llama-cpp model
-static MODEL: OnceLock<Mutex<Option<LlmEngine>>> = OnceLock::new();
+/// Global singleton for the chat session
+/// Uses OnceCell and Mutex for thread-safe access and initialization
+pub static CHAT_SESSION: OnceCell<Mutex<Chat<Llama>>> = OnceCell::const_new();
 
-pub struct LlmEngine {
-    // TODO: Add llama-cpp model handle
-    _initialized: bool,
-}
+/// Global singleton for the language model
+/// Stores the base LLM that can generate new chat sessions when needed
+pub static MODEL: OnceCell<Mutex<Llama>> = OnceCell::const_new();
 
-pub struct LlmConfig {
-    pub model_path: String,
-    pub context_size: u32,
-    pub temperature: f32,
-    pub top_p: f32,
-    pub max_tokens: u32,
-    pub gpu_layers: u32,
-}
+/// Initializes the language model and creates a chat session
+///
+/// This function:
+/// 1. Checks if the model is already initialized
+/// 2. If not, creates a new Llama model instance with the Qwen 2.5 7B model
+/// 3. Creates a chat session from the model
+/// 4. Stores both in their respective global singletons
+///
+/// Returns Ok(()) on success or an error message on failure
+pub async fn init_chat_model() -> Result<(), String> {
+    use kalosm::language::LlamaSource;
 
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            model_path: "./models/qwen2.5-7b-instruct-q4_k_m.gguf".to_string(),
-            context_size: 4096,
-            temperature: 0.7,
-            top_p: 0.9,
-            max_tokens: 2048,
-            gpu_layers: 0,
-        }
+    if CHAT_SESSION.get().is_none() {
+        println!("Initializing chat model...");
+        println!("Downloading Qwen 2.5 1.5B model (smaller for faster startup)...");
+
+        // Use smaller 1.5B model for faster download and inference
+        let llama = Llama::builder()
+            .with_source(
+                LlamaSource::qwen_2_5_1_5b_instruct()
+            )
+            .build()
+            .await
+            .map_err(|e| {
+                eprintln!("Error building model: {}", e);
+                e.to_string()
+            })?;
+
+        println!("Model loaded successfully!");
+        let chat = llama.chat();
+        MODEL.set(Mutex::new(llama))
+            .map_err(|_| "Couldn't set model".to_string())?;
+        CHAT_SESSION.set(Mutex::new(chat))
+            .map_err(|_| "Couldn't set chat session".to_string())?;
     }
+    Ok(())
 }
 
-/// Initialize the LLM model
-pub async fn init_model() -> Result<()> {
-    let config = LlmConfig::default();
-    println!("Initializing LLM model: {}", config.model_path);
+/// Creates a stream for generating text responses from the language model
+///
+/// This function:
+/// 1. Retrieves the chat session from the global singleton
+/// 2. Sends the user's prompt to the model
+/// 3. Configures generation parameters (temperature, top_p, etc.)
+/// 4. Returns a stream that will yield text chunks as they are generated
+///
+/// # Parameters
+/// * `prompt` - The user's input message
+///
+/// # Returns
+/// * `Result<impl Stream<Item=String>, &'static str>` - A text generation stream or an error
+pub fn try_get_stream(prompt: &str) -> Result<impl futures::Stream<Item=String>, &'static str> {
+    use kalosm::language::GenerationParameters;
 
-    // TODO: Initialize llama-cpp model
-    // let model = llama_cpp::LlamaModel::load(&config.model_path)?;
+    let chat_session = CHAT_SESSION
+        .get()
+        .ok_or("Model couldn't be initialized.")?;
 
-    let engine = LlmEngine {
-        _initialized: true,
-    };
+    let mut guard = chat_session
+        .try_lock()
+        .map_err(|_| "Couldn't get model lock")?;
 
-    MODEL.get_or_init(|| Mutex::new(Some(engine)));
-    println!("LLM model initialized successfully");
+    Ok(guard(&prompt.into_chat_message()).with_sampler(GenerationParameters::default()
+        .with_temperature(0.7)     // Controls randomness (higher = more random)
+        .with_top_p(0.9)           // Nucleus sampling parameter (higher = more diverse)
+        .with_max_length(600)      // Maximum response length in tokens
+    ))
+}
+
+/// Resets the chat session to start a new conversation
+///
+/// This function:
+/// 1. Retrieves the base language model
+/// 2. Creates a fresh chat session
+/// 3. Replaces the existing chat session in the global singleton
+///
+/// This effectively clears the conversation history and starts with a clean state.
+///
+/// # Returns
+/// * `Result<(), String>` - Success or an error message
+pub async fn reset_chat() -> Result<(), String> {
+    let llama = MODEL
+        .get()
+        .ok_or("Model not initialized")?
+        .lock()
+        .map_err(|_| "Error locking model")?;
+    let new_chat = llama.chat();
+    let session_mutex = CHAT_SESSION
+        .get()
+        .ok_or("Session not initialized")?;
+    *session_mutex
+        .lock()
+        .map_err(|_| "Error locking session")? = new_chat;
     Ok(())
 }
 
 /// Check if the model is initialized
 pub fn is_initialized() -> bool {
-    MODEL.get()
-        .map(|m| m.try_lock().map(|g| g.is_some()).unwrap_or(false))
-        .unwrap_or(false)
-}
-
-/// Generate a streaming response
-pub fn generate_stream(prompt: &str) -> Result<impl futures::Stream<Item = String>> {
-    println!("Generating response for: {}", prompt);
-
-    // TODO: Implement actual LLM inference
-    // For now, return a mock stream
-    let tokens = vec![
-        "I ".to_string(),
-        "am ".to_string(),
-        "a ".to_string(),
-        "local ".to_string(),
-        "AI ".to_string(),
-        "assistant. ".to_string(),
-        "This ".to_string(),
-        "is ".to_string(),
-        "a ".to_string(),
-        "placeholder ".to_string(),
-        "response.".to_string(),
-    ];
-
-    Ok(futures::stream::iter(tokens))
-}
-
-/// Reset the chat session
-pub async fn reset_session() -> Result<()> {
-    println!("Resetting chat session");
-    // TODO: Reset llama-cpp context
-    Ok(())
+    CHAT_SESSION.get().is_some()
 }

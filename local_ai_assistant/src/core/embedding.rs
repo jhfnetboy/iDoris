@@ -1,66 +1,81 @@
-//! Embedding Engine Module
+//! Embedding Model Implementation
 //!
-//! Handles text embedding using fastembed.
+//! This module provides functionality for text embedding generation using the BERT model.
+//! It manages a singleton embedding model instance and offers methods to convert text
+//! into numerical vector representations for semantic search and comparison.
 
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
-use anyhow::Result;
+use std::sync::Mutex;
+use kalosm::language::Bert;
+use tokio::sync::OnceCell;
 
-static EMBEDDING_MODEL: OnceLock<Mutex<Option<EmbeddingEngine>>> = OnceLock::new();
+/// Global singleton for the BERT embedding model
+/// Uses OnceCell and Mutex for thread-safe access and initialization
+pub static EMBEDDING_MODEL: OnceCell<Mutex<Bert>> = OnceCell::const_new();
 
-pub struct EmbeddingEngine {
-    // TODO: Add fastembed model handle
-    _initialized: bool,
-}
-
-pub struct EmbeddingConfig {
-    pub model_name: String,
-}
-
-impl Default for EmbeddingConfig {
-    fn default() -> Self {
-        Self {
-            model_name: "BAAI/bge-small-en-v1.5".to_string(),
-        }
+/// Initializes the BERT embedding model
+///
+/// This function:
+/// 1. Checks if the model is already initialized
+/// 2. If not, creates a new Bert model instance
+/// 3. Stores the model in the global singleton
+///
+/// The embedding model is used to convert text into vector representations
+/// that capture semantic meaning, which enables similarity-based searches.
+///
+/// Returns Ok(()) on success or an error message on failure
+pub async fn init_embedding_model() -> Result<(), String> {
+    if EMBEDDING_MODEL.get().is_none() {
+        println!("Initializing embedding model...");
+        let bert = Bert::new().await.map_err(|e| e.to_string())?;
+        println!("Embedding model loaded successfully");
+        EMBEDDING_MODEL.set(Mutex::new(bert))
+            .map_err(|_| "Couldn't set embedding model".to_string())?;
     }
+    Ok(())
 }
 
-/// Initialize the embedding model
-pub async fn init_model() -> Result<()> {
-    let config = EmbeddingConfig::default();
-    println!("Initializing embedding model: {}", config.model_name);
+/// Converts input text into vector embeddings
+///
+/// This function:
+/// 1. Accesses the global embedding model
+/// 2. Generates vector embeddings for the provided text
+/// 3. Returns the vector representation
+///
+/// The generated embeddings capture the semantic meaning of the text
+/// and can be used for similarity comparisons and semantic search.
+///
+/// # Parameters
+/// * `text` - The text to convert into embeddings
+///
+/// # Returns
+/// * `Result<Vec<f32>, String>` - The embedding vector or an error message
+pub async fn embed_text(text: &str) -> Result<Vec<f32>, String> {
+    use kalosm::language::EmbedderExt;
+    let embedding_model = EMBEDDING_MODEL
+        .get()
+        .ok_or("Embedding model not initialized")?
+        .lock()
+        .map_err(|_| "Error locking embedding model")?;
 
-    // TODO: Initialize fastembed model
-    // let model = fastembed::TextEmbedding::new(config.model_name)?;
-
-    let engine = EmbeddingEngine {
-        _initialized: true,
-    };
-
-    EMBEDDING_MODEL.get_or_init(|| Mutex::new(Some(engine)));
-    println!("Embedding model initialized successfully");
-    Ok(())
+    let embeddings = embedding_model.embed(text)
+        .await
+        .map_err(|e| e.to_string())?;
+    println!("Embedding generated for text: {:?}", embeddings.vector().to_vec());
+    Ok(embeddings.vector().to_vec())
 }
 
 /// Check if the embedding model is initialized
 pub fn is_initialized() -> bool {
-    EMBEDDING_MODEL.get()
-        .map(|m| m.try_lock().map(|g| g.is_some()).unwrap_or(false))
-        .unwrap_or(false)
+    EMBEDDING_MODEL.get().is_some()
 }
 
-/// Generate embeddings for text
-pub async fn embed_text(text: &str) -> Result<Vec<f32>> {
-    println!("Generating embedding for: {}...", &text[..text.len().min(50)]);
-
-    // TODO: Implement actual embedding
-    // For now, return a mock embedding (384 dimensions for bge-small)
-    let embedding = vec![0.0f32; 384];
-    Ok(embedding)
+/// Wrapper function for async init
+pub async fn init_model() -> Result<(), anyhow::Error> {
+    init_embedding_model().await.map_err(|e| anyhow::anyhow!(e))
 }
 
 /// Generate embeddings for multiple texts
-pub async fn embed_batch(texts: &[String]) -> Result<Vec<Vec<f32>>> {
+pub async fn embed_batch(texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
     let mut embeddings = Vec::with_capacity(texts.len());
     for text in texts {
         embeddings.push(embed_text(text).await?);

@@ -10,14 +10,14 @@ reload_html = true
 watch_path = ["src", "assets"]
 
 [web.resource]
-dev = "assets"
 style = ["assets/tailwind.css"]
+script = []
 
-[[web.proxy]]
-backend = "http://localhost:8080"
+[web.resource.dev]
+script = []
 
 [server]
-port = 8080
+port = 8282
 
 [server.watcher]
 watch_path = ["src"]
