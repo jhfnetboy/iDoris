@@ -113,13 +113,9 @@ pub async fn reset_chat() -> Result<(), ServerFnError> {
 #[get("/api/get_response?prompt")]
 pub async fn get_response(prompt: String) -> Result<TextStream> {
     use crate::core::llm;
-    use futures::channel::mpsc;
-    use kalosm::language::StreamExt;
-
-    let (tx, rx) = mpsc::unbounded();
 
     // Check if the model is initialized
-    if llm::CHAT_SESSION.get().is_none() {
+    if !llm::is_initialized() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Model not initialized"
@@ -129,21 +125,10 @@ pub async fn get_response(prompt: String) -> Result<TextStream> {
     let time = std::time::Instant::now();
     println!("Processing prompt: {}", prompt);
 
-    // Try to get a stream without restarting
-    let mut stream = llm::try_get_stream(&prompt).map_err(|e| {
+    // Try to get a stream (now returns an UnboundedReceiver which is a Stream)
+    let rx = llm::try_get_stream(&prompt).map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::Other, e)
     })?;
-
-    tokio::spawn(async move {
-        let _ = tx.unbounded_send("".to_string());
-        // Consume the stream and send tokens to the channel
-        while let Some(token) = stream.next().await {
-            if tx.unbounded_send(token).is_err() {
-                println!("Error sending token");
-                break;
-            }
-        }
-    });
 
     println!("\nTotal response time: {:?}", time.elapsed());
     Ok(TextStream::new(rx))
@@ -275,7 +260,7 @@ pub async fn get_current_model() -> Result<ModelInfo, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use crate::core::llm::get_current_model_id;
-        let current_id = get_current_model_id();
+        let current_id = get_current_model_id().await;
         let models = crate::models::get_available_models();
 
         models.into_iter()

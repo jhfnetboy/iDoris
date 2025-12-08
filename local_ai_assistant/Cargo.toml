@@ -27,12 +27,16 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 uuid = { version = "1.11", features = ["v4", "serde", "js"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# Phase 2.1+ for runtime model switching
+scopeguard = { version = "1.2", optional = true }
+once_cell = { version = "1.19", optional = true }
+
 [features]
 default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite"]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell"]
 
 [profile.wasm-dev]
 inherits = "dev"
