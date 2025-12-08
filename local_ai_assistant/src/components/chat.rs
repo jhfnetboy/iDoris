@@ -367,7 +367,9 @@ fn render_input_area(
                                     if event.key() == Key::Enter && !event.modifiers().shift() {
                                         event.prevent_default();
                                         let current = state.read().clone();
-                                        if !current.input_message.trim().is_empty() {
+                                        // Only send if model is ready and input is not empty
+                                        let is_ready = !current.is_model_loading && !current.is_database_loading;
+                                        if is_ready && !current.input_message.trim().is_empty() {
                                             spawn(handle_message_send(state.clone(), messages.clone(), session.clone(), sessions.clone(), settings.clone()));
                                         }
                                     }
