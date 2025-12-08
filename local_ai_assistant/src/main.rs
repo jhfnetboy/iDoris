@@ -11,6 +11,9 @@ mod models;
 #[cfg(feature = "server")]
 mod core;
 
+#[cfg(feature = "server")]
+mod storage;
+
 mod server_functions;
 
 /// Static resources used by the application

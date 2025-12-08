@@ -9,6 +9,9 @@ pub enum ResponseLanguage {
     Chinese,
     English,
     Thai,
+    Spanish,
+    French,
+    German,
 }
 
 impl ResponseLanguage {
@@ -17,6 +20,9 @@ impl ResponseLanguage {
             ResponseLanguage::Chinese => "Chinese",
             ResponseLanguage::English => "English",
             ResponseLanguage::Thai => "Thai",
+            ResponseLanguage::Spanish => "Spanish",
+            ResponseLanguage::French => "French",
+            ResponseLanguage::German => "German",
         }
     }
 
@@ -25,6 +31,9 @@ impl ResponseLanguage {
             ResponseLanguage::Chinese => "请用中文回答。",
             ResponseLanguage::English => "Please respond in English.",
             ResponseLanguage::Thai => "กรุณาตอบเป็นภาษาไทย",
+            ResponseLanguage::Spanish => "Por favor, responde en español.",
+            ResponseLanguage::French => "Veuillez répondre en français.",
+            ResponseLanguage::German => "Bitte antworte auf Deutsch.",
         }
     }
 }

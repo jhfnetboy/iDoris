@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use crate::models::{ChatMessage, ChatRole, Session, AppSettings};
-use crate::server_functions::{get_response, reset_chat, search_context, init_llm_model, init_embedding_model, init_db};
+use crate::server_functions::{get_response, reset_chat, search_context, init_llm_model, init_embedding_model, init_db, init_sqlite_db, create_session, save_message, update_session_title, get_sessions};
 use super::Message;
 
 #[cfg(target_arch = "wasm32")]
@@ -40,7 +40,7 @@ pub fn Chat(
     });
 
     use_effect(move || {
-        initialize_systems(state.clone(), model_ready.clone());
+        initialize_systems(state.clone(), model_ready.clone(), sessions.clone());
     });
 
     use_effect(move || {
@@ -439,10 +439,34 @@ fn render_input_area(
     }
 }
 
-fn initialize_systems(state: Signal<ChatState>, model_ready: Signal<bool>) {
+fn initialize_systems(state: Signal<ChatState>, model_ready: Signal<bool>, sessions: Signal<Vec<Session>>) {
     initialize_language_model(state.clone(), model_ready.clone());
     initialize_database(state.clone());
     initialize_embedding_model();
+    initialize_sqlite_database(sessions);
+}
+
+fn initialize_sqlite_database(mut sessions: Signal<Vec<Session>>) {
+    spawn(async move {
+        match init_sqlite_db().await {
+            Ok(_) => {
+                println!("SQLite database initialized successfully");
+                // Load sessions after SQLite is ready
+                match get_sessions().await {
+                    Ok(loaded_sessions) => {
+                        println!("Loaded {} sessions from database", loaded_sessions.len());
+                        sessions.set(loaded_sessions);
+                    }
+                    Err(e) => {
+                        println!("Error loading sessions: {:?}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("Error initializing SQLite database: {}", e);
+            }
+        }
+    });
 }
 
 fn initialize_language_model(mut state: Signal<ChatState>, mut model_ready: Signal<bool>) {
@@ -517,22 +541,59 @@ async fn handle_message_send(
     }
 
     // Auto-create session if none exists and add to sidebar history
+    // Also update title if session has default "New Chat" title
     let session = match session {
-        Some(s) => s,
-        None => {
-            // Generate session title from first message (truncate if too long)
-            let first_msg = current_state.input_message.trim();
-            let title = if first_msg.len() > 30 {
-                format!("{}...", &first_msg[..27])
+        Some(s) => {
+            // Check if this is a new session with default title and no messages yet
+            let needs_title_update = s.title == "New Chat" && messages.read().is_empty();
+            if needs_title_update {
+                let first_msg = current_state.input_message.trim();
+                let new_title = extract_session_title(first_msg);
+
+                // Update title in database
+                let _ = update_session_title(s.id.to_string(), new_title.clone()).await;
+
+                // Update session in local state
+                let mut updated_session = s.clone();
+                updated_session.title = new_title;
+
+                // Update in sessions list
+                let mut sessions_list = sessions.read().clone();
+                if let Some(idx) = sessions_list.iter().position(|sess| sess.id == s.id) {
+                    sessions_list[idx] = updated_session.clone();
+                    sessions.set(sessions_list);
+                }
+
+                // Update current session
+                current_session.set(Some(updated_session.clone()));
+                updated_session
             } else {
-                first_msg.to_string()
-            };
-            let new_session = Session::new(title);
-            // Add to sessions list so it appears in sidebar
-            sessions.write().insert(0, new_session.clone());
-            // Set as current session
-            current_session.set(Some(new_session.clone()));
-            new_session
+                s
+            }
+        },
+        None => {
+            // Generate session title from first message using keyword extraction
+            let first_msg = current_state.input_message.trim();
+            let title = extract_session_title(first_msg);
+
+            // Create session on server (persisted to SQLite)
+            match create_session(Some(title.clone())).await {
+                Ok(new_session) => {
+                    // Add to sessions list so it appears in sidebar
+                    sessions.write().insert(0, new_session.clone());
+                    // Set as current session
+                    current_session.set(Some(new_session.clone()));
+                    new_session
+                }
+                Err(e) => {
+                    println!("Error creating session: {:?}", e);
+                    // Fallback to local-only session
+                    let new_session = Session::new(title);
+                    sessions.write().insert(0, new_session.clone());
+                    current_session.set(Some(new_session.clone()));
+                    new_session
+                }
+            }
         }
     };
 
@@ -540,10 +601,19 @@ async fn handle_message_send(
     new_state.cancel_token = false;
     new_state.is_model_answering = true;
     let user_message = current_state.input_message.trim().to_string();
-    messages.write().push(ChatMessage::user(session.id, user_message.clone()));
-    messages.write().push(ChatMessage::assistant(session.id, String::new()));
+    let user_msg = ChatMessage::user(session.id, user_message.clone());
+    let assistant_msg = ChatMessage::assistant(session.id, String::new());
+
+    // Save user message to database
+    let _ = save_message(user_msg.clone()).await;
+
+    messages.write().push(user_msg);
+    messages.write().push(assistant_msg.clone());
     new_state.input_message = String::new();
     state.set(new_state);
+
+    // Keep track of assistant message ID for saving later
+    let assistant_msg_id = assistant_msg.id;
 
     // Get language instruction from settings
     let language_instruction = {
@@ -551,10 +621,10 @@ async fn handle_message_send(
         settings_guard.language.prompt_instruction().to_string()
     };
 
-    process_response(state.clone(), messages.clone(), user_message, language_instruction);
+    process_response(state.clone(), messages.clone(), user_message, language_instruction, session.id, assistant_msg_id);
 }
 
-fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatMessage>>, user_message: String, language_instruction: String) {
+fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatMessage>>, user_message: String, language_instruction: String, session_id: uuid::Uuid, assistant_msg_id: uuid::Uuid) {
     spawn(async move {
         #[cfg(target_arch = "wasm32")]
         web_sys::console::log_1(&"[WASM] process_response started".into());
@@ -631,6 +701,21 @@ fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatM
             }
         }
 
+        // Save assistant message to database after stream completes
+        {
+            let current_messages = messages.read();
+            if let Some(last_msg) = current_messages.iter().find(|m| m.id == assistant_msg_id) {
+                let msg_to_save = ChatMessage {
+                    id: assistant_msg_id,
+                    session_id,
+                    role: crate::models::ChatRole::Assistant,
+                    content: last_msg.content.clone(),
+                    created_at: last_msg.created_at,
+                };
+                let _ = save_message(msg_to_save).await;
+            }
+        }
+
         // Finalize response state
         let mut current_state = state.read().clone();
         current_state.is_model_answering = false;
@@ -671,3 +756,58 @@ fn focus_input() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn focus_input() {}
+
+/// Extracts keywords from user message to generate session title
+/// Filters out common stop words and focuses on meaningful content words
+fn extract_session_title(message: &str) -> String {
+    // Common stop words to filter out
+    const STOP_WORDS: &[&str] = &[
+        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "must", "can", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "through", "during",
+        "before", "after", "above", "below", "between", "under", "again",
+        "further", "then", "once", "here", "there", "when", "where", "why",
+        "how", "all", "each", "few", "more", "most", "other", "some", "such",
+        "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+        "just", "and", "but", "if", "or", "because", "until", "while", "about",
+        "what", "which", "who", "whom", "this", "that", "these", "those", "am",
+        "it", "its", "i", "me", "my", "myself", "we", "our", "ours", "you",
+        "your", "yours", "he", "him", "his", "she", "her", "hers", "they",
+        "them", "their", "please", "help", "want", "need", "tell", "explain",
+        "show", "give", "make", "let", "know", "think", "like",
+        // Chinese stop words
+        "的", "了", "是", "在", "我", "有", "和", "就", "不", "人", "都", "一",
+        "个", "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有",
+        "看", "好", "自己", "这", "那", "吗", "什么", "怎么", "为什么", "如何",
+        "请", "帮", "告诉", "解释", "能", "可以", "想", "用",
+    ];
+
+    // Split message into words and filter
+    let words: Vec<&str> = message
+        .split(|c: char| c.is_whitespace() || c == '?' || c == '!' || c == '.' || c == ',' || c == '。' || c == '？' || c == '！' || c == '，')
+        .filter(|w| !w.is_empty())
+        .filter(|w| w.len() > 1 || w.chars().any(|c| !c.is_ascii()))  // Keep multi-char words or non-ASCII
+        .filter(|w| !STOP_WORDS.contains(&w.to_lowercase().as_str()))
+        .collect();
+
+    // Take up to 4 keywords
+    let keywords: Vec<&str> = words.into_iter().take(4).collect();
+
+    if keywords.is_empty() {
+        // Fallback: use first 25 chars of original message
+        if message.len() > 25 {
+            format!("{}...", &message.chars().take(22).collect::<String>())
+        } else {
+            message.to_string()
+        }
+    } else {
+        let title = keywords.join(" ");
+        // Ensure title isn't too long
+        if title.len() > 30 {
+            format!("{}...", &title.chars().take(27).collect::<String>())
+        } else {
+            title
+        }
+    }
+}

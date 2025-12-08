@@ -22,24 +22,58 @@ static DB_CONN: OnceCell<Mutex<Option<Surreal<Db>>>> = OnceCell::const_new();
 static DOCUMENT_TABLE: OnceCell<Mutex<Option<DocumentTable<Db>>>> = OnceCell::const_new();
 
 /// Constants for database configuration
-const DB_PATH: &str = "./db";
-const DB_FILE: &str = "./db/temp.db";
-const EMBEDDINGS_FILE: &str = "./db/embeddings.db";
 const NAMESPACE: &str = "test";
 const DATABASE: &str = "test";
 const TABLE_NAME: &str = "documents";
-const CONTEXT_FOLDER: &str = "./context";
+
+/// Get the project root directory
+fn get_project_root() -> PathBuf {
+    // Fallback to the local_ai_assistant project directory
+    let fallback = PathBuf::from("/Volumes/UltraDisk/Dev2/crypto-projects/AI-test/local_ai_assistant");
+    if fallback.exists() {
+        return fallback;
+    }
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// Get database paths based on project root
+fn get_db_path() -> PathBuf {
+    get_project_root().join("db")
+}
+
+fn get_db_file() -> PathBuf {
+    get_project_root().join("db/temp.db")
+}
+
+fn get_embeddings_file() -> PathBuf {
+    get_project_root().join("db/embeddings.db")
+}
+
+/// Get the context folder path - public for use by other modules
+pub fn get_context_folder() -> PathBuf {
+    get_project_root().join("context")
+}
 
 /// Establishes a connection to the database and initializes the document table
 ///
 /// This function coordinates the entire database setup process.
+/// It is idempotent - calling multiple times is safe and will reuse existing connections.
 ///
 /// Returns Ok(()) on success or an error message on failure
 pub async fn connect_to_database() -> Result<(), String> {
     // Initialize global singletons
     initialize_globals().await;
 
-    // Clean old database files
+    // Check if already initialized - return early if so
+    {
+        let dt_guard = DOCUMENT_TABLE.get().unwrap().lock().await;
+        if dt_guard.is_some() {
+            println!("Vector store already initialized, skipping...");
+            return Ok(());
+        }
+    }
+
+    // Only clean and rebuild on first initialization
     cleanup_database_files()?;
 
     // Connect to database
@@ -69,23 +103,24 @@ async fn initialize_globals() {
 
 /// Cleans up existing database files
 fn cleanup_database_files() -> Result<(), String> {
-    let db_path = PathBuf::from(DB_PATH);
+    let db_path = get_db_path();
     if db_path.exists() {
         std::fs::remove_dir_all(&db_path).map_err(|e| {
             eprintln!("Error removing existing database: {}", e);
             e.to_string()
         })?;
-        println!("Removed existing database files");
+        println!("Removed existing database files at {:?}", db_path);
     } else {
-        println!("No existing database found, creating a new one");
+        println!("No existing database found at {:?}, creating a new one", db_path);
     }
     Ok(())
 }
 
 /// Creates a new database connection
 async fn create_database_connection() -> Result<Surreal<Db>, String> {
-    println!("Connecting to the database...");
-    let db = Surreal::new::<SurrealKv>(DB_FILE)
+    let db_file = get_db_file();
+    println!("Connecting to the database at {:?}...", db_file);
+    let db = Surreal::new::<SurrealKv>(db_file)
         .await
         .map_err(|e| e.to_string())?;
     println!("Database connected successfully");
@@ -104,10 +139,11 @@ async fn configure_database(db: &Surreal<Db>) -> Result<(), String> {
 
 /// Creates the document table with semantic chunking
 async fn create_document_table(db: &Surreal<Db>) -> Result<DocumentTable<Db>, String> {
-    println!("Creating document table...");
+    let embeddings_file = get_embeddings_file();
+    println!("Creating document table with embeddings at {:?}...", embeddings_file);
     let dt = db.document_table_builder(TABLE_NAME)
         .with_chunker(SemanticChunker::default())
-        .at(EMBEDDINGS_FILE)
+        .at(embeddings_file)
         .build::<Document>()
         .await
         .map_err(|e| {
@@ -138,7 +174,8 @@ async fn add_documents() -> Result<(), String> {
     println!("Adding documents to the table...");
 
     // Check if context folder exists
-    let context_path = PathBuf::from(CONTEXT_FOLDER);
+    let context_path = get_context_folder();
+    println!("Using context folder: {:?}", context_path);
     if !context_path.exists() {
         println!("Context folder does not exist, creating it...");
         std::fs::create_dir_all(&context_path).map_err(|e| e.to_string())?;
@@ -148,7 +185,8 @@ async fn add_documents() -> Result<(), String> {
     }
 
     // Load documents from folder
-    let raw_documents = load_documents_from_folder(CONTEXT_FOLDER)?;
+    let context_folder_str = context_path.to_string_lossy().to_string();
+    let raw_documents = load_documents_from_folder(&context_folder_str)?;
 
     // Get document table reference
     let table = get_document_table().await?;
@@ -251,12 +289,13 @@ async fn create_embedding_from_query(
 }
 
 /// Performs semantic search using the embedding vector
+/// Returns up to 3 results for better RAG coverage
 async fn perform_semantic_search(
     table: &DocumentTable<Db>,
     query_embed: Embedding
 ) -> Result<Vec<EmbeddingIndexedTableSearchResult<Document>>, String> {
     table.search(query_embed)
-        .with_results(1)
+        .with_results(3)  // Return 3 results instead of 1 for better RAG coverage
         .await
         .map_err(|e| e.to_string())
 }
@@ -282,4 +321,41 @@ pub async fn init() -> Result<(), anyhow::Error> {
 /// Check if vector store is initialized
 pub fn is_initialized() -> bool {
     DOCUMENT_TABLE.get().is_some()
+}
+
+/// Reload documents from context folder into existing table
+/// This adds new documents without rebuilding the entire database
+pub async fn reload_documents() -> Result<String, String> {
+    // Check if table is initialized
+    if !is_initialized() {
+        return Err("Vector store not initialized. Please restart the application.".to_string());
+    }
+
+    println!("Reloading documents from context folder...");
+
+    // Get context folder path
+    let context_path = get_context_folder();
+    if !context_path.exists() {
+        return Err(format!("Context folder not found: {:?}", context_path));
+    }
+
+    // Get document table
+    let table = get_document_table().await?;
+
+    // Load and process documents
+    let context_folder_str = context_path.to_string_lossy().to_string();
+    let raw_documents = load_documents_from_folder(&context_folder_str)?;
+    let documents = process_documents(raw_documents).await?;
+
+    // Insert documents (this will add new documents to the existing table)
+    let doc_count = documents.len();
+    for document in documents {
+        if let Err(e) = insert_single_document(&table, document).await {
+            eprintln!("Warning: Failed to insert document: {}", e);
+        }
+    }
+
+    let msg = format!("Loaded {} documents from context folder", doc_count);
+    println!("{}", msg);
+    Ok(msg)
 }

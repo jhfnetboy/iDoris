@@ -59,11 +59,11 @@ pub fn Sidebar(
                                 },
                                 onclick: move |_| on_select_session.call(session_clone.clone()),
                                 div {
-                                    class: "truncate font-medium",
+                                    class: "truncate font-medium text-slate-100",
                                     "{session.title}"
                                 }
                                 div {
-                                    class: "text-xs text-gray-400 mt-1",
+                                    class: "text-xs text-slate-400 mt-1",
                                     {session.created_at.format("%m/%d %H:%M").to_string()}
                                 }
                             }

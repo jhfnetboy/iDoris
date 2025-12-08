@@ -183,9 +183,9 @@ pub async fn search_context(q: String) -> Result<String, ServerFnError> {
     }
 }
 
-/// Initializes the database connection.
+/// Initializes the vector store database connection.
 ///
-/// Must be called before any database operations can be performed.
+/// Must be called before any vector store operations can be performed.
 ///
 /// # Returns
 ///
@@ -199,6 +199,31 @@ pub async fn init_db() -> Result<(), ServerFnError> {
             .map_err(|e| {
                 eprintln!("Error: {:?}", e);
                 ServerFnError::new(e)
+            })?;
+        Ok(())
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(())
+    }
+}
+
+/// Initializes the SQLite database for session persistence.
+///
+/// Must be called before any session/message operations can be performed.
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
+#[server]
+pub async fn init_sqlite_db() -> Result<(), ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        crate::storage::database::init()
+            .await
+            .map_err(|e| {
+                eprintln!("Error initializing SQLite: {:?}", e);
+                ServerFnError::new(&format!("SQLite init error: {}", e))
             })?;
         Ok(())
     }

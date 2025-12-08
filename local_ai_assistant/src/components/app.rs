@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 use crate::models::{Session, ChatMessage, AppSettings};
+use crate::server_functions::get_session_messages;
 use super::{Sidebar, Chat, SettingsPanel};
 
 /// Main application component
@@ -28,6 +29,8 @@ pub fn App() -> Element {
 
     // Sidebar collapsed state
     let mut sidebar_collapsed: Signal<bool> = use_signal(|| false);
+
+    // Note: Sessions are loaded after SQLite initialization in Chat component
 
     // Get theme classes from settings
     let theme = settings.read().theme.clone();
@@ -64,14 +67,25 @@ pub fn App() -> Element {
                 current_session: current_session,
                 on_new_session: move |_| {
                     let new_session = Session::default_title();
-                    sessions.write().push(new_session.clone());
+                    sessions.write().insert(0, new_session.clone());
                     current_session.set(Some(new_session));
                     messages.write().clear();
                 },
                 on_select_session: move |session: Session| {
+                    let session_id = session.id.to_string();
                     current_session.set(Some(session));
-                    // TODO: Load messages for session
-                    messages.write().clear();
+                    // Load messages for selected session
+                    spawn(async move {
+                        match get_session_messages(session_id).await {
+                            Ok(loaded_messages) => {
+                                messages.set(loaded_messages);
+                            }
+                            Err(e) => {
+                                println!("Error loading messages: {:?}", e);
+                                messages.set(Vec::new());
+                            }
+                        }
+                    });
                 },
                 on_toggle_settings: move |_| {
                     show_settings.set(!show_settings());

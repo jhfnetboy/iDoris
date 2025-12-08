@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize};
+use crate::server_functions::{list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile};
 
 #[component]
 pub fn SettingsPanel(
@@ -89,6 +90,9 @@ pub fn SettingsPanel(
                         class: "space-y-1",
                         { render_language_option(settings.clone(), ResponseLanguage::Chinese, "中文 (Chinese)", current.language == ResponseLanguage::Chinese) }
                         { render_language_option(settings.clone(), ResponseLanguage::English, "English", current.language == ResponseLanguage::English) }
+                        { render_language_option(settings.clone(), ResponseLanguage::Spanish, "Español (Spanish)", current.language == ResponseLanguage::Spanish) }
+                        { render_language_option(settings.clone(), ResponseLanguage::French, "Français (French)", current.language == ResponseLanguage::French) }
+                        { render_language_option(settings.clone(), ResponseLanguage::German, "Deutsch (German)", current.language == ResponseLanguage::German) }
                         { render_language_option(settings.clone(), ResponseLanguage::Thai, "ไทย (Thai)", current.language == ResponseLanguage::Thai) }
                     }
                 }
@@ -124,6 +128,230 @@ pub fn SettingsPanel(
                         { render_font_size_option(settings.clone(), FontSize::ExtraLarge, current.font_size == FontSize::ExtraLarge) }
                     }
                 }
+
+                // Divider
+                div {
+                    class: "border-t border-slate-600 my-4"
+                }
+
+                // Context Management (RAG)
+                ContextManager {}
+            }
+        }
+    }
+}
+
+/// Context Manager Component for RAG documents
+#[component]
+fn ContextManager() -> Element {
+    let mut context_files: Signal<Vec<ContextFile>> = use_signal(Vec::new);
+    let mut show_add_form: Signal<bool> = use_signal(|| false);
+    let mut new_title: Signal<String> = use_signal(String::new);
+    let mut new_content: Signal<String> = use_signal(String::new);
+    let mut status_message: Signal<Option<String>> = use_signal(|| None);
+    let mut is_loading: Signal<bool> = use_signal(|| false);
+
+    // Load context files on mount
+    use_effect(move || {
+        spawn(async move {
+            match list_context_files().await {
+                Ok(files) => context_files.set(files),
+                Err(e) => println!("Error loading context files: {:?}", e),
+            }
+        });
+    });
+
+    // Reload files function
+    let reload_files = move || {
+        spawn(async move {
+            match list_context_files().await {
+                Ok(files) => context_files.set(files),
+                Err(e) => println!("Error reloading context files: {:?}", e),
+            }
+        });
+    };
+
+    rsx! {
+        div {
+            class: "space-y-3",
+
+            // Header
+            div {
+                class: "flex items-center justify-between",
+                label {
+                    class: "block text-sm font-medium text-slate-300",
+                    "Context Documents (RAG)"
+                }
+                button {
+                    class: "text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white transition-colors",
+                    onclick: move |_| show_add_form.set(!show_add_form()),
+                    if show_add_form() { "Cancel" } else { "+ Add" }
+                }
+            }
+
+            // Add form
+            if show_add_form() {
+                div {
+                    class: "space-y-2 p-3 bg-slate-700 rounded-lg",
+                    input {
+                        class: "w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500",
+                        r#type: "text",
+                        placeholder: "Document title...",
+                        value: "{new_title}",
+                        oninput: move |e| new_title.set(e.value()),
+                    }
+                    textarea {
+                        class: "w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded text-white text-sm placeholder-slate-400 focus:outline-none focus:border-blue-500 resize-none",
+                        rows: "6",
+                        placeholder: "Paste your context content here...\n\nThis can be documentation, knowledge base articles, or any text you want the AI to reference.",
+                        value: "{new_content}",
+                        oninput: move |e| new_content.set(e.value()),
+                    }
+                    div {
+                        class: "flex gap-2",
+                        button {
+                            class: "flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 rounded text-white text-sm transition-colors disabled:opacity-50",
+                            disabled: is_loading() || new_title().trim().is_empty() || new_content().trim().is_empty(),
+                            onclick: move |_| {
+                                let title = new_title().trim().to_string();
+                                let content = new_content().trim().to_string();
+                                if !title.is_empty() && !content.is_empty() {
+                                    is_loading.set(true);
+                                    spawn(async move {
+                                        match add_context_document(title, content).await {
+                                            Ok(_) => {
+                                                status_message.set(Some("Document added! Reload database to use it.".to_string()));
+                                                new_title.set(String::new());
+                                                new_content.set(String::new());
+                                                show_add_form.set(false);
+                                                // Reload file list
+                                                if let Ok(files) = list_context_files().await {
+                                                    context_files.set(files);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                status_message.set(Some(format!("Error: {}", e)));
+                                            }
+                                        }
+                                        is_loading.set(false);
+                                    });
+                                }
+                            },
+                            if is_loading() { "Saving..." } else { "Save Document" }
+                        }
+                    }
+                }
+            }
+
+            // Status message
+            if let Some(msg) = status_message() {
+                div {
+                    class: "text-xs p-2 bg-slate-700 rounded text-slate-300",
+                    "{msg}"
+                    button {
+                        class: "ml-2 text-slate-400 hover:text-white",
+                        onclick: move |_| status_message.set(None),
+                        "×"
+                    }
+                }
+            }
+
+            // File list
+            div {
+                class: "space-y-1 max-h-48 overflow-y-auto",
+                if context_files().is_empty() {
+                    div {
+                        class: "text-sm text-slate-400 italic py-2",
+                        "No context documents. Add some to enable RAG."
+                    }
+                } else {
+                    for file in context_files() {
+                        div {
+                            key: "{file.name}",
+                            class: "flex items-center justify-between p-2 bg-slate-700 rounded text-sm",
+                            div {
+                                class: "flex-1 min-w-0",
+                                div {
+                                    class: "text-white truncate",
+                                    "{file.name}"
+                                }
+                                div {
+                                    class: "text-xs text-slate-400 truncate",
+                                    "{file.preview}"
+                                }
+                            }
+                            button {
+                                class: "ml-2 p-1 text-red-400 hover:text-red-300 hover:bg-slate-600 rounded transition-colors",
+                                onclick: {
+                                    let filename = file.name.clone();
+                                    move |_| {
+                                        let filename = filename.clone();
+                                        spawn(async move {
+                                            if let Ok(_) = delete_context_document(filename).await {
+                                                if let Ok(files) = list_context_files().await {
+                                                    context_files.set(files);
+                                                }
+                                                status_message.set(Some("Document deleted. Reload database to apply.".to_string()));
+                                            }
+                                        });
+                                    }
+                                },
+                                svg {
+                                    class: "w-4 h-4",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Reload database button
+            button {
+                class: "w-full px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-300 transition-colors flex items-center justify-center gap-2",
+                disabled: is_loading(),
+                onclick: move |_| {
+                    is_loading.set(true);
+                    status_message.set(Some("Reloading context database...".to_string()));
+                    spawn(async move {
+                        match reload_context_database().await {
+                            Ok(msg) => {
+                                status_message.set(Some(msg));
+                            }
+                            Err(e) => {
+                                status_message.set(Some(format!("Reload failed: {}", e)));
+                            }
+                        }
+                        is_loading.set(false);
+                    });
+                },
+                svg {
+                    class: if is_loading() { "w-4 h-4 animate-spin" } else { "w-4 h-4" },
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    view_box: "0 0 24 24",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    }
+                }
+                "Reload Context Database"
+            }
+
+            // Help text
+            div {
+                class: "text-xs text-slate-500",
+                "Add documents to give AI context. Enable 'Use Context' in chat to use RAG."
             }
         }
     }
