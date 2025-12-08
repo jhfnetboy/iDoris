@@ -8,7 +8,9 @@ description = "A cross-platform local AI assistant based on rusty_bot"
 
 [dependencies]
 dioxus = { version = "0.7.2", features = ["fullstack"] }
-kalosm = { git = "https://github.com/floneum/floneum", features = ["language", "surrealdb"], optional = true }
+kalosm = { git = "https://github.com/floneum/floneum", features = ["language", "surrealdb", "vision"], optional = true }
+image = { version = "0.25", optional = true }
+base64 = { version = "0.22", optional = true }
 tokio = "1.45.1"
 web-sys = { version = "0.3.77", features = ["console"] }
 gloo-net = { version = "0.6", features = ["http"] }
@@ -36,7 +38,7 @@ default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell"]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64"]
 
 [profile.wasm-dev]
 inherits = "dev"

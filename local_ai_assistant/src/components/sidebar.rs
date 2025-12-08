@@ -10,6 +10,7 @@ pub fn Sidebar(
     on_new_session: EventHandler<()>,
     on_select_session: EventHandler<Session>,
     on_toggle_settings: EventHandler<()>,
+    on_toggle_image_gen: EventHandler<()>,
     sidebar_collapsed: Signal<bool>,
 ) -> Element {
     if sidebar_collapsed() {
@@ -75,6 +76,28 @@ pub fn Sidebar(
             // Footer with settings button
             div {
                 class: "p-4 border-t border-gray-700 space-y-3",
+
+                // Image Generation button
+                button {
+                    class: "w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-3 transition-colors",
+                    onclick: move |_| on_toggle_image_gen.call(()),
+                    svg {
+                        class: "w-5 h-5 text-white",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        }
+                    }
+                    span {
+                        class: "text-white",
+                        "Image Gen"
+                    }
+                }
 
                 // Settings button
                 button {

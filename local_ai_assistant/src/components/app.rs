@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use crate::models::{Session, ChatMessage, AppSettings};
 use crate::server_functions::get_session_messages;
-use super::{Sidebar, Chat, SettingsPage};
+use super::{Sidebar, Chat, SettingsPage, ImageGenPanel};
 
 /// Main application component
 #[component]
@@ -26,6 +26,9 @@ pub fn App() -> Element {
     // Settings state
     let settings: Signal<AppSettings> = use_signal(AppSettings::default);
     let mut show_settings: Signal<bool> = use_signal(|| false);
+
+    // Image generation panel state
+    let mut show_image_gen: Signal<bool> = use_signal(|| false);
 
     // Sidebar collapsed state
     let mut sidebar_collapsed: Signal<bool> = use_signal(|| false);
@@ -90,7 +93,15 @@ pub fn App() -> Element {
                 on_toggle_settings: move |_| {
                     show_settings.set(!show_settings());
                 },
+                on_toggle_image_gen: move |_| {
+                    show_image_gen.set(!show_image_gen());
+                },
                 sidebar_collapsed: sidebar_collapsed,
+            }
+
+            // Image generation panel
+            ImageGenPanel {
+                show_image_gen: show_image_gen,
             }
 
             // Settings page (full-page overlay)
