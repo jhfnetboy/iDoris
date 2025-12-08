@@ -1,8 +1,11 @@
 //! Settings Panel Component
 
 use dioxus::prelude::*;
-use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize};
-use crate::server_functions::{list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile};
+use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize, ModelInfo, ModelStatus};
+use crate::server_functions::{
+    list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile,
+    list_available_models, get_current_model, switch_llm_model
+};
 
 #[component]
 pub fn SettingsPanel(
@@ -55,29 +58,8 @@ pub fn SettingsPanel(
             div {
                 class: "p-4 space-y-6",
 
-                // Model Selection
-                div {
-                    class: "space-y-2",
-                    label {
-                        class: "block text-sm font-medium text-slate-300",
-                        "AI Model"
-                    }
-                    select {
-                        class: "w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500",
-                        value: "{current.model_name}",
-                        onchange: {
-                            let mut settings = settings.clone();
-                            move |e: Event<FormData>| {
-                                let mut s = settings.read().clone();
-                                s.model_name = e.value();
-                                settings.set(s);
-                            }
-                        },
-                        option { value: "Qwen 2.5 7B", "Qwen 2.5 7B" }
-                        option { value: "Qwen 2.5 3B", "Qwen 2.5 3B" }
-                        option { value: "Llama 3.2 8B", "Llama 3.2 8B" }
-                    }
-                }
+                // Model Selection (Dynamic)
+                ModelSelector { settings: settings }
 
                 // Response Language
                 div {
@@ -430,6 +412,165 @@ fn render_font_size_option(mut settings: Signal<AppSettings>, size: FontSize, is
             span {
                 class: sample_class,
                 "Aa"
+            }
+        }
+    }
+}
+
+/// Model Selector Component for LLM model selection (Phase 2.1)
+#[component]
+fn ModelSelector(settings: Signal<AppSettings>) -> Element {
+    let mut available_models: Signal<Vec<ModelInfo>> = use_signal(Vec::new);
+    let mut current_model: Signal<Option<ModelInfo>> = use_signal(|| None);
+    let mut status_message: Signal<Option<String>> = use_signal(|| None);
+    let mut is_loading: Signal<bool> = use_signal(|| false);
+
+    // Load available models and current model on mount
+    use_effect(move || {
+        spawn(async move {
+            // Load available models
+            match list_available_models().await {
+                Ok(models) => available_models.set(models),
+                Err(e) => println!("Error loading available models: {:?}", e),
+            }
+
+            // Load current model
+            match get_current_model().await {
+                Ok(model) => current_model.set(Some(model)),
+                Err(e) => println!("Error loading current model: {:?}", e),
+            }
+        });
+    });
+
+    rsx! {
+        div {
+            class: "space-y-3",
+
+            // Header
+            label {
+                class: "block text-sm font-medium text-slate-300",
+                "AI Model"
+            }
+
+            // Current model info
+            if let Some(model) = current_model() {
+                div {
+                    class: "p-3 bg-slate-700 rounded-lg",
+                    div {
+                        class: "flex items-center justify-between",
+                        div {
+                            class: "text-white font-medium",
+                            "{model.name}"
+                        }
+                        div {
+                            class: "text-xs px-2 py-1 rounded bg-green-600 text-white",
+                            "Active"
+                        }
+                    }
+                    div {
+                        class: "text-xs text-slate-400 mt-1",
+                        "Size: {model.size} | Memory: {model.memory_required}"
+                    }
+                    div {
+                        class: "text-xs text-slate-500 mt-1",
+                        "{model.description}"
+                    }
+                }
+            }
+
+            // Status message
+            if let Some(msg) = status_message() {
+                div {
+                    class: "text-xs p-2 bg-amber-900/50 border border-amber-700 rounded text-amber-200",
+                    "{msg}"
+                    button {
+                        class: "ml-2 text-amber-400 hover:text-white",
+                        onclick: move |_| status_message.set(None),
+                        "×"
+                    }
+                }
+            }
+
+            // Available models list
+            div {
+                class: "space-y-2",
+                label {
+                    class: "block text-xs text-slate-400",
+                    "Available Models"
+                }
+                for model in available_models() {
+                    {
+                        let model_id = model.id.clone();
+                        let model_name = model.name.clone();
+                        let is_current = current_model().map(|m| m.id == model.id).unwrap_or(false);
+
+                        rsx! {
+                            button {
+                                key: "{model.id}",
+                                class: if is_current {
+                                    "w-full p-3 text-left rounded-lg bg-blue-600/30 border border-blue-500 text-white"
+                                } else {
+                                    "w-full p-3 text-left rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-300 transition-colors"
+                                },
+                                disabled: is_loading() || is_current,
+                                onclick: move |_| {
+                                    let model_id = model_id.clone();
+                                    let model_name = model_name.clone();
+                                    is_loading.set(true);
+                                    status_message.set(Some(format!("Switching to {}...", model_name)));
+                                    spawn(async move {
+                                        match switch_llm_model(model_id.clone()).await {
+                                            Ok(_) => {
+                                                // Refresh current model
+                                                if let Ok(model) = get_current_model().await {
+                                                    current_model.set(Some(model));
+                                                    status_message.set(Some(format!("{} is now active", model_name)));
+                                                }
+                                            }
+                                            Err(e) => {
+                                                status_message.set(Some(format!("Cannot switch: {}", e)));
+                                            }
+                                        }
+                                        is_loading.set(false);
+                                    });
+                                },
+                                div {
+                                    class: "flex items-center justify-between",
+                                    div {
+                                        span {
+                                            class: "font-medium",
+                                            "{model.name}"
+                                        }
+                                        if is_current {
+                                            span {
+                                                class: "ml-2 text-xs text-blue-300",
+                                                "(current)"
+                                            }
+                                        }
+                                    }
+                                    span {
+                                        class: "text-xs text-slate-400",
+                                        "{model.size}"
+                                    }
+                                }
+                                div {
+                                    class: "text-xs text-slate-500 mt-1",
+                                    "{model.description}"
+                                }
+                                div {
+                                    class: "text-xs text-slate-600 mt-1",
+                                    "Memory: {model.memory_required}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Note about model switching
+            div {
+                class: "text-xs text-slate-500 p-2 bg-slate-800 rounded border border-slate-700",
+                "⚠ Model switching requires app restart. Select your preferred model before initializing."
             }
         }
     }

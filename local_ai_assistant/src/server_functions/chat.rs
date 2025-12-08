@@ -5,6 +5,7 @@
 
 use dioxus::prelude::*;
 use dioxus::fullstack::TextStream;
+use crate::models::{ModelInfo, ModelStatus};
 
 /// Initializes the language model for chat functionality.
 ///
@@ -245,6 +246,86 @@ pub async fn init_sqlite_db() -> Result<(), ServerFnError> {
     }
     #[cfg(not(feature = "server"))]
     {
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Model Management Server Functions (Phase 2.1)
+// ============================================================================
+
+/// Returns the list of available LLM models.
+///
+/// # Returns
+///
+/// * `Result<Vec<ModelInfo>>` - List of available models or error
+#[server]
+pub async fn list_available_models() -> Result<Vec<ModelInfo>, ServerFnError> {
+    use crate::models::get_available_models;
+    Ok(get_available_models())
+}
+
+/// Gets the currently active model.
+///
+/// # Returns
+///
+/// * `Result<ModelInfo>` - Current model info or error
+#[server]
+pub async fn get_current_model() -> Result<ModelInfo, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::core::llm::get_current_model_id;
+        let current_id = get_current_model_id();
+        let models = crate::models::get_available_models();
+
+        models.into_iter()
+            .find(|m| m.id == current_id)
+            .map(|mut m| {
+                m.status = ModelStatus::Active;
+                m
+            })
+            .ok_or_else(|| ServerFnError::new("Current model not found in available models"))
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(ModelInfo::new(
+            "qwen-2.5-1.5b",
+            "Qwen 2.5 1.5B",
+            "1.5B",
+            "4-6GB",
+            "Fast responses, good for simple tasks"
+        ))
+    }
+}
+
+/// Switches to a different LLM model.
+///
+/// This will unload the current model and load the new one.
+/// Note: This operation may take some time as models need to be downloaded/loaded.
+///
+/// # Arguments
+///
+/// * `model_id` - The ID of the model to switch to
+///
+/// # Returns
+///
+/// * `Result<()>` - Success or error with detailed message
+#[server]
+pub async fn switch_llm_model(model_id: String) -> Result<(), ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::core::llm::switch_model;
+
+        println!("Switching to model: {}", model_id);
+
+        switch_model(&model_id).await.map_err(|e| {
+            eprintln!("Error switching model: {}", e);
+            ServerFnError::new(&format!("Error switching model: {}", e))
+        })
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = model_id;
         Ok(())
     }
 }
