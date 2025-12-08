@@ -2,13 +2,17 @@
 
 use dioxus::prelude::*;
 use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize};
-use crate::server_functions::{list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile};
+use crate::server_functions::{
+    list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile,
+    is_image_model_ready, init_image_model, get_image_gen_status,
+};
 
 /// Settings page tabs
 #[derive(Clone, PartialEq, Default)]
 pub enum SettingsTab {
     #[default]
     General,
+    Models,
     Appearance,
     Language,
     Context,
@@ -81,6 +85,7 @@ pub fn SettingsPage(
                 nav {
                     class: "w-56 bg-slate-800/50 border-r border-slate-700 p-4 space-y-1",
                     { render_nav_item(active_tab.clone(), SettingsTab::General, "General", "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z") }
+                    { render_nav_item(active_tab.clone(), SettingsTab::Models, "Models", "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z") }
                     { render_nav_item(active_tab.clone(), SettingsTab::Appearance, "Appearance", "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01") }
                     { render_nav_item(active_tab.clone(), SettingsTab::Language, "Language", "M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129") }
                     { render_nav_item(active_tab.clone(), SettingsTab::Context, "Context (RAG)", "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z") }
@@ -93,6 +98,7 @@ pub fn SettingsPage(
                     class: "flex-1 overflow-y-auto p-6",
                     match active_tab() {
                         SettingsTab::General => rsx! { GeneralSettings { settings: settings } },
+                        SettingsTab::Models => rsx! { ModelsSettings { settings: settings } },
                         SettingsTab::Appearance => rsx! { AppearanceSettings { settings: settings } },
                         SettingsTab::Language => rsx! { LanguageSettings { settings: settings } },
                         SettingsTab::Context => rsx! { ContextSettings {} },
@@ -198,6 +204,276 @@ fn GeneralSettings(settings: Signal<AppSettings>) -> Element {
                         class: "text-sm text-slate-400",
                         p { "Models are downloaded automatically on first use." }
                         p { class: "mt-1", "Qwen 2.5 7B requires ~5GB of disk space." }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Models settings section - Chat Model and Image Gen Model
+#[component]
+fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
+    let current = settings.read().clone();
+    let mut image_model_ready: Signal<bool> = use_signal(|| false);
+    let mut image_model_downloading: Signal<bool> = use_signal(|| false);
+    let mut download_status: Signal<String> = use_signal(|| "Not downloaded".to_string());
+    let mut download_progress: Signal<u8> = use_signal(|| 0);
+
+    // Check image model status on mount
+    use_effect(move || {
+        spawn(async move {
+            match is_image_model_ready().await {
+                Ok(ready) => {
+                    image_model_ready.set(ready);
+                    if ready {
+                        download_status.set("Ready".to_string());
+                    }
+                }
+                Err(_) => image_model_ready.set(false),
+            }
+        });
+    });
+
+    rsx! {
+        div {
+            class: "max-w-2xl space-y-8",
+
+            h2 {
+                class: "text-lg font-semibold text-white mb-4",
+                "Model Management"
+            }
+
+            // Chat Model Section
+            div {
+                class: "bg-slate-800 rounded-lg p-4 space-y-4",
+                div {
+                    class: "flex items-center gap-2 mb-3",
+                    svg {
+                        class: "w-5 h-5 text-blue-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        }
+                    }
+                    h3 {
+                        class: "text-md font-medium text-white",
+                        "Chat Model (LLM)"
+                    }
+                }
+
+                p {
+                    class: "text-xs text-slate-400 mb-3",
+                    "Select the language model for generating chat responses"
+                }
+
+                select {
+                    class: "w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500",
+                    value: "{current.model_name}",
+                    onchange: {
+                        let mut settings = settings.clone();
+                        move |e: Event<FormData>| {
+                            let mut s = settings.read().clone();
+                            s.model_name = e.value();
+                            settings.set(s);
+                        }
+                    },
+                    option { value: "Qwen 2.5 7B", "Qwen 2.5 7B (Recommended)" }
+                    option { value: "Qwen 2.5 3B", "Qwen 2.5 3B (Faster)" }
+                    option { value: "Llama 3.2 8B", "Llama 3.2 8B" }
+                }
+
+                div {
+                    class: "mt-3 p-3 bg-slate-700/50 rounded-lg",
+                    div {
+                        class: "flex items-center gap-2 text-sm",
+                        div {
+                            class: "w-2 h-2 rounded-full bg-green-500"
+                        }
+                        span { class: "text-slate-300", "Downloads automatically on first use (~5GB)" }
+                    }
+                }
+            }
+
+            // Image Generation Model Section
+            div {
+                class: "bg-slate-800 rounded-lg p-4 space-y-4",
+                div {
+                    class: "flex items-center gap-2 mb-3",
+                    svg {
+                        class: "w-5 h-5 text-purple-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        }
+                    }
+                    h3 {
+                        class: "text-md font-medium text-white",
+                        "Image Generation Model"
+                    }
+                }
+
+                p {
+                    class: "text-xs text-slate-400 mb-3",
+                    "Wuerstchen model for generating images from text prompts"
+                }
+
+                // Model info card
+                div {
+                    class: "p-3 bg-slate-700/50 rounded-lg space-y-2",
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Model" }
+                        span { class: "text-white", "Wuerstchen" }
+                    }
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Size" }
+                        span { class: "text-white", "~2GB" }
+                    }
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Status" }
+                        span {
+                            class: if image_model_ready() { "text-green-400" } else { "text-yellow-400" },
+                            if image_model_ready() { "Ready" } else { "{download_status}" }
+                        }
+                    }
+                }
+
+                // Download progress (shown during download)
+                if image_model_downloading() {
+                    div {
+                        class: "space-y-2",
+                        div {
+                            class: "flex items-center justify-between text-sm",
+                            span { class: "text-slate-300", "{download_status}" }
+                            span { class: "text-purple-400", "{download_progress}%" }
+                        }
+                        div {
+                            class: "w-full bg-slate-600 rounded-full h-2 overflow-hidden",
+                            div {
+                                class: "bg-purple-500 h-2 rounded-full transition-all duration-300",
+                                style: "width: {download_progress}%",
+                            }
+                        }
+                    }
+                }
+
+                // Download / Status button
+                if image_model_ready() {
+                    div {
+                        class: "flex items-center gap-2 p-3 bg-green-900/30 border border-green-800 rounded-lg",
+                        svg {
+                            class: "w-5 h-5 text-green-400",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        span { class: "text-green-300 text-sm", "Model downloaded and ready to use" }
+                    }
+                } else if !image_model_downloading() {
+                    button {
+                        class: "w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2",
+                        onclick: move |_| {
+                            image_model_downloading.set(true);
+                            download_status.set("Starting download...".to_string());
+                            download_progress.set(0);
+
+                            // Start status polling
+                            spawn(async move {
+                                loop {
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        gloo_timers::future::TimeoutFuture::new(500).await;
+                                    }
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                    }
+
+                                    if !image_model_downloading() {
+                                        break;
+                                    }
+
+                                    match get_image_gen_status().await {
+                                        Ok(status) => {
+                                            download_status.set(status.status);
+                                            download_progress.set(status.progress);
+                                        }
+                                        Err(_) => {}
+                                    }
+                                }
+                            });
+
+                            // Start download
+                            spawn(async move {
+                                match init_image_model().await {
+                                    Ok(_) => {
+                                        image_model_ready.set(true);
+                                        download_status.set("Ready".to_string());
+                                    }
+                                    Err(e) => {
+                                        download_status.set(format!("Error: {}", e));
+                                    }
+                                }
+                                image_model_downloading.set(false);
+                            });
+                        },
+                        svg {
+                            class: "w-5 h-5",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                            }
+                        }
+                        "Download Image Model (~2GB)"
+                    }
+                }
+            }
+
+            // Info box
+            div {
+                class: "bg-blue-900/30 border border-blue-800 rounded-lg p-4",
+                div {
+                    class: "flex items-start gap-3",
+                    svg {
+                        class: "w-5 h-5 text-blue-400 mt-0.5",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        }
+                    }
+                    div {
+                        class: "text-sm text-blue-200",
+                        p { "Models are stored locally in the Hugging Face cache directory." }
+                        p { class: "mt-1 text-blue-300/70", "Once downloaded, models persist across app restarts." }
                     }
                 }
             }

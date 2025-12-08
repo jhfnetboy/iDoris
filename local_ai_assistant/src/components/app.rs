@@ -190,6 +190,9 @@ pub fn App() -> Element {
                     ActivePanel::ImageGen => rsx! {
                         ImageGenPanel {
                             embedded: true,
+                            on_open_settings: EventHandler::new(move |_| {
+                                show_settings.set(true);
+                            }),
                         }
                     },
                 }
