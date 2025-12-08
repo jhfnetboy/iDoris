@@ -14,6 +14,7 @@ base64 = { version = "0.22", optional = true }
 tokio = "1.45.1"
 web-sys = { version = "0.3.77", features = ["console"] }
 gloo-net = { version = "0.6", features = ["http"] }
+gloo-timers = "0.3"
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2.100"

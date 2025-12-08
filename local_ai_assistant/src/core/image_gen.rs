@@ -6,20 +6,21 @@
 //! Phase 2.2: Image Generation Support
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use once_cell::sync::Lazy;
+use kalosm::vision::Wuerstchen;
 
-/// Global storage for image generation model
-static IMAGE_MODEL: Lazy<Mutex<Option<ImageGenState>>> = Lazy::new(|| Mutex::new(None));
+/// Global storage for image generation model - persists across requests
+static IMAGE_MODEL: Lazy<Mutex<Option<Wuerstchen>>> = Lazy::new(|| Mutex::new(None));
 
 /// Flag to indicate if the model is currently generating
 static IS_GENERATING: AtomicBool = AtomicBool::new(false);
 
-/// State holder for the image generation model
-struct ImageGenState {
-    // The Wuerstchen model will be stored here when initialized
-    _initialized: bool,
-}
+/// Current generation status message
+static GEN_STATUS: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+
+/// Generation progress (0-100)
+static GEN_PROGRESS: AtomicU8 = AtomicU8::new(0);
 
 /// Image generation settings
 #[derive(Clone, Debug)]
@@ -90,21 +91,46 @@ impl GeneratedImage {
 
 /// Initialize the image generation model
 pub async fn init_image_model() -> Result<(), String> {
-    use kalosm::vision::Wuerstchen;
+    use kalosm::vision::ModelLoadingProgress;
 
-    println!("Initializing image generation model (Wuerstchen)...");
-
-    let _model = Wuerstchen::new().await.map_err(|e| {
-        eprintln!("Error initializing Wuerstchen model: {}", e);
-        e.to_string()
-    })?;
-
-    // Store initialization state
-    {
-        let mut model_guard = IMAGE_MODEL.lock().unwrap();
-        *model_guard = Some(ImageGenState { _initialized: true });
+    // Check if already initialized
+    if is_initialized() {
+        println!("Image model already loaded, skipping initialization");
+        return Ok(());
     }
 
+    println!("Initializing image generation model (Wuerstchen)...");
+    set_status("Downloading model...", 2);
+
+    let model = Wuerstchen::builder()
+        .build_with_loading_handler(|progress| {
+            let pct_f = progress.progress();
+            let pct = ((pct_f * 98.0) as u8 + 2).min(100);
+
+            match &progress {
+                ModelLoadingProgress::Downloading { source, .. } => {
+                    set_status(&format!("Downloading: {:.0}%", pct_f * 100.0), pct);
+                    println!("[ImageGen] Downloading {}: {:.1}%", source, pct_f * 100.0);
+                }
+                ModelLoadingProgress::Loading { .. } => {
+                    set_status(&format!("Loading: {:.0}%", pct_f * 100.0), pct);
+                    println!("[ImageGen] Loading into memory: {:.1}%", pct_f * 100.0);
+                }
+            }
+        })
+        .await
+        .map_err(|e| {
+            eprintln!("Error initializing Wuerstchen model: {}", e);
+            e.to_string()
+        })?;
+
+    // Store the model in global state
+    {
+        let mut model_guard = IMAGE_MODEL.lock().unwrap();
+        *model_guard = Some(model);
+    }
+
+    set_status("Ready", 0);
     println!("Image generation model initialized successfully!");
     Ok(())
 }
@@ -121,9 +147,27 @@ pub fn is_generating() -> bool {
     IS_GENERATING.load(Ordering::SeqCst)
 }
 
+/// Get current generation status
+pub fn get_generation_status() -> (String, u8) {
+    let status = GEN_STATUS.lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+    let progress = GEN_PROGRESS.load(Ordering::SeqCst);
+    (status, progress)
+}
+
+/// Set generation status and progress
+fn set_status(status: &str, progress: u8) {
+    if let Ok(mut s) = GEN_STATUS.lock() {
+        *s = status.to_string();
+    }
+    GEN_PROGRESS.store(progress, Ordering::SeqCst);
+    println!("[ImageGen] {}: {}%", status, progress);
+}
+
 /// Generate an image from a text prompt
 pub async fn generate_image(settings: ImageGenSettings) -> Result<GeneratedImage, String> {
-    use kalosm::vision::{Wuerstchen, WuerstchenInferenceSettings};
+    use kalosm::vision::WuerstchenInferenceSettings;
     use futures::StreamExt;
     use image::ImageFormat;
     use std::io::Cursor;
@@ -133,45 +177,71 @@ pub async fn generate_image(settings: ImageGenSettings) -> Result<GeneratedImage
         return Err("Image generation is already in progress".to_string());
     }
 
-    // Use a guard to ensure we reset the flag
+    // Use a guard to ensure we reset the flag and status
     let _guard = scopeguard::guard((), |_| {
         IS_GENERATING.store(false, Ordering::SeqCst);
+        set_status("Ready", 0);
     });
 
-    println!("Starting image generation...");
+    set_status("Starting generation...", 1);
     println!("Prompt: {}", settings.prompt);
 
-    // Create a new model instance for this generation
-    // (Wuerstchen doesn't persist state like LLM chat sessions)
-    let model = Wuerstchen::new().await.map_err(|e| {
-        eprintln!("Error creating Wuerstchen model: {}", e);
-        e.to_string()
-    })?;
+    // Initialize model if not already done (downloads only once)
+    if !is_initialized() {
+        init_image_model().await?;
+    }
 
-    // Build inference settings
-    let mut inference = WuerstchenInferenceSettings::new(&settings.prompt);
+    set_status("Model loaded, preparing...", 20);
 
-    // Note: WuerstchenInferenceSettings may have limited configuration options
-    // The exact API depends on the kalosm version
+    set_status("Generating image...", 30);
 
-    // Run generation and collect the last image
+    // Take the model out temporarily for generation (to avoid holding lock across await)
+    let model = {
+        let mut model_guard = IMAGE_MODEL.lock().map_err(|e| format!("Failed to lock model: {}", e))?;
+        model_guard.take().ok_or("Model not initialized")?
+    };
+
+    // Build inference settings and run generation
+    let inference = WuerstchenInferenceSettings::new(&settings.prompt);
+    let total_steps = settings.num_steps;
     let mut images = model.run(inference);
     let mut last_image = None;
+    let mut step_count = 0;
 
     while let Some(image_result) = images.next().await {
+        step_count += 1;
+        let progress = 30 + ((step_count as f32 / total_steps as f32) * 60.0) as u8;
+        let progress = progress.min(90);
+        set_status(&format!("Step {}/{}", step_count, total_steps), progress);
+
         if let Some(img) = image_result.generated_image() {
             last_image = Some(img.clone());
         }
     }
 
-    let generated_img = last_image.ok_or("No image generated")?;
+    // Put the model back
+    {
+        let mut model_guard = IMAGE_MODEL.lock().map_err(|e| format!("Failed to lock model: {}", e))?;
+        *model_guard = Some(model);
+    }
+
+    set_status("Processing result...", 95);
+
+    let generated_img = last_image.ok_or_else(|| {
+        set_status("Failed: No image generated", 0);
+        "No image generated".to_string()
+    })?;
 
     // Convert to PNG bytes
     let mut png_bytes = Vec::new();
     let mut cursor = Cursor::new(&mut png_bytes);
     generated_img.write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode image: {}", e))?;
+        .map_err(|e| {
+            set_status(&format!("Failed: {}", e), 0);
+            format!("Failed to encode image: {}", e)
+        })?;
 
+    set_status("Complete!", 100);
     println!("Image generated successfully! Size: {} bytes", png_bytes.len());
 
     Ok(GeneratedImage {

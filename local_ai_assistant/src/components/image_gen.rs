@@ -4,15 +4,15 @@
 
 use dioxus::prelude::*;
 use crate::server_functions::{
-    generate_image, generate_image_simple, is_image_generating, is_image_model_ready, ImageResult
+    generate_image, is_image_model_ready, get_image_gen_status, ImageResult, ImageGenStatus
 };
 
+/// Props for ImageGenPanel - embedded mode means it's part of the main content area
 #[component]
-pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
-    if !show_image_gen() {
-        return rsx! {};
-    }
-
+pub fn ImageGenPanel(
+    #[props(default = false)]
+    embedded: bool,
+) -> Element {
     let mut prompt: Signal<String> = use_signal(String::new);
     let mut negative_prompt: Signal<String> = use_signal(String::new);
     let mut width: Signal<u32> = use_signal(|| 512);
@@ -23,6 +23,8 @@ pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
     let mut generated_image: Signal<Option<ImageResult>> = use_signal(|| None);
     let mut error_message: Signal<Option<String>> = use_signal(|| None);
     let mut model_ready: Signal<bool> = use_signal(|| false);
+    let mut gen_status: Signal<String> = use_signal(|| String::new());
+    let mut gen_progress: Signal<u8> = use_signal(|| 0);
 
     // Check if model is ready on mount
     use_effect(move || {
@@ -34,63 +36,71 @@ pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
         });
     });
 
+    // Note: Status polling is now handled inside the generate button onclick handler
+    // to avoid the use_effect dependency tracking issues that caused continuous polling
+
+    // Use different container styles based on embedded mode
+    let container_class = if embedded {
+        "flex-1 flex flex-col overflow-hidden"
+    } else {
+        "fixed left-64 top-0 bottom-0 w-[600px] bg-slate-800 border-r border-slate-700 z-50 shadow-xl overflow-y-auto"
+    };
+
     rsx! {
-        // Backdrop
+        // Image Generation panel - embedded in main content area
         div {
-            class: "fixed inset-0 bg-black/50 backdrop-blur-sm z-40",
-            onclick: move |_| show_image_gen.set(false),
-        }
+            class: "{container_class}",
 
-        // Image Generation panel
-        div {
-            class: "fixed left-64 top-0 bottom-0 w-[600px] bg-slate-800 border-r border-slate-700 z-50 shadow-xl overflow-y-auto",
-
-            // Header
+            // Content area with scroll
             div {
-                class: "flex items-center justify-between p-4 border-b border-slate-700",
-                h2 {
-                    class: "text-lg font-semibold text-white flex items-center gap-2",
-                    svg {
-                        class: "w-5 h-5 text-purple-400",
-                        fill: "none",
-                        stroke: "currentColor",
-                        stroke_width: "2",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        }
-                    }
-                    "Image Generation"
-                }
-                button {
-                    class: "p-1 rounded hover:bg-slate-700 transition-colors",
-                    onclick: move |_| show_image_gen.set(false),
-                    svg {
-                        class: "w-5 h-5 text-slate-400",
-                        fill: "none",
-                        stroke: "currentColor",
-                        stroke_width: "2",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M6 18L18 6M6 6l12 12"
-                        }
-                    }
-                }
-            }
+                class: "flex-1 overflow-y-auto p-6",
 
-            // Content
-            div {
-                class: "p-4 space-y-4",
+                // Main content wrapper with max width for better readability
+                div {
+                    class: "max-w-2xl mx-auto space-y-6",
 
-                // Model status warning
-                if !model_ready() {
-                    div {
-                        class: "p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-amber-200 text-sm",
-                        "Image generation model is loading. This may take a few minutes on first use."
+                // Model status info - show different message based on ready state
+                if !is_generating() {
+                    if model_ready() {
+                        // Model is ready - show green success message
+                        div {
+                            class: "p-3 bg-green-900/50 border border-green-700 rounded-lg text-green-200 text-sm",
+                            div { class: "flex items-center gap-2",
+                                svg {
+                                    class: "w-4 h-4",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    }
+                                }
+                                "Model loaded and ready to generate images"
+                            }
+                        }
+                    } else {
+                        // Model not loaded - show download info
+                        div {
+                            class: "p-3 bg-blue-900/50 border border-blue-700 rounded-lg text-blue-200 text-sm",
+                            div { class: "flex items-center gap-2",
+                                svg {
+                                    class: "w-4 h-4",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    }
+                                }
+                                "Model (~2GB) downloads automatically when you click Generate"
+                            }
+                        }
                     }
                 }
 
@@ -225,6 +235,44 @@ pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
                     }
                 }
 
+                // Progress indicator (shown during generation)
+                if is_generating() {
+                    div {
+                        class: "p-4 bg-slate-700/50 rounded-lg space-y-3",
+                        // Status text
+                        div {
+                            class: "flex items-center justify-between text-sm",
+                            span {
+                                class: "text-slate-300",
+                                if gen_status().is_empty() {
+                                    "Starting..."
+                                } else {
+                                    "{gen_status()}"
+                                }
+                            }
+                            span {
+                                class: "text-purple-400 font-medium",
+                                "{gen_progress()}%"
+                            }
+                        }
+                        // Progress bar
+                        div {
+                            class: "w-full bg-slate-600 rounded-full h-2.5 overflow-hidden",
+                            div {
+                                class: "bg-purple-500 h-2.5 rounded-full transition-all duration-300",
+                                style: "width: {gen_progress()}%",
+                            }
+                        }
+                        // Animated dots
+                        div {
+                            class: "flex items-center justify-center gap-1 text-slate-400 text-xs",
+                            span { class: "animate-pulse", "●" }
+                            span { class: "animate-pulse delay-100", "●" }
+                            span { class: "animate-pulse delay-200", "●" }
+                        }
+                    }
+                }
+
                 // Generate button
                 button {
                     class: "w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2",
@@ -239,7 +287,36 @@ pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
                         if !p.is_empty() {
                             is_generating.set(true);
                             error_message.set(None);
+                            gen_status.set("Starting...".to_string());
+                            gen_progress.set(0);
 
+                            // Start status polling in a separate task
+                            spawn(async move {
+                                loop {
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        gloo_timers::future::TimeoutFuture::new(500).await;
+                                    }
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                    }
+
+                                    if !is_generating() {
+                                        break;
+                                    }
+
+                                    match get_image_gen_status().await {
+                                        Ok(status) => {
+                                            gen_status.set(status.status);
+                                            gen_progress.set(status.progress);
+                                        }
+                                        Err(_) => {}
+                                    }
+                                }
+                            });
+
+                            // Start the actual generation
                             spawn(async move {
                                 match generate_image(p, neg, Some(w), Some(h), Some(s)).await {
                                     Ok(result) => {
@@ -347,7 +424,8 @@ pub fn ImageGenPanel(show_image_gen: Signal<bool>) -> Element {
                         li { "Higher steps = better quality but slower generation" }
                     }
                 }
-            }
-        }
-    }
+                } // Close max-w-2xl div
+            } // Close overflow-y-auto div
+        } // Close container div
+    } // Close rsx!
 }

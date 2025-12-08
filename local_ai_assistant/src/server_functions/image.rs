@@ -67,6 +67,41 @@ pub async fn is_image_generating() -> Result<bool, ServerFnError> {
     }
 }
 
+/// Generation status response
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ImageGenStatus {
+    pub is_generating: bool,
+    pub status: String,
+    pub progress: u8,
+}
+
+/// Gets the current image generation status.
+///
+/// # Returns
+///
+/// * `Result<ImageGenStatus>` - Current generation status, message, and progress (0-100)
+#[server]
+pub async fn get_image_gen_status() -> Result<ImageGenStatus, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::core::image_gen::{is_generating, get_generation_status};
+        let (status, progress) = get_generation_status();
+        Ok(ImageGenStatus {
+            is_generating: is_generating(),
+            status,
+            progress,
+        })
+    }
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(ImageGenStatus {
+            is_generating: false,
+            status: "Not available".to_string(),
+            progress: 0,
+        })
+    }
+}
+
 /// Generates an image from a text prompt.
 ///
 /// # Arguments

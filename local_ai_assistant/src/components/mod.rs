@@ -8,7 +8,7 @@ mod settings;
 mod settings_page;
 mod image_gen;
 
-pub use app::App;
+pub use app::{App, ActivePanel};
 pub use sidebar::Sidebar;
 pub use chat::Chat;
 pub use message::Message;

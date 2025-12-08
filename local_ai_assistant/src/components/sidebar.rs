@@ -2,15 +2,17 @@
 
 use dioxus::prelude::*;
 use crate::models::Session;
+use super::ActivePanel;
 
 #[component]
 pub fn Sidebar(
     sessions: Signal<Vec<Session>>,
     current_session: Signal<Option<Session>>,
+    active_panel: Signal<ActivePanel>,
     on_new_session: EventHandler<()>,
     on_select_session: EventHandler<Session>,
     on_toggle_settings: EventHandler<()>,
-    on_toggle_image_gen: EventHandler<()>,
+    on_select_panel: EventHandler<ActivePanel>,
     sidebar_collapsed: Signal<bool>,
 ) -> Element {
     if sidebar_collapsed() {
@@ -73,16 +75,47 @@ pub fn Sidebar(
                 }
             }
 
-            // Footer with settings button
+            // Panel selector menu
             div {
-                class: "p-4 border-t border-gray-700 space-y-3",
+                class: "p-3 border-t border-gray-700",
+                div {
+                    class: "text-xs text-slate-500 uppercase font-semibold mb-2 px-1",
+                    "Panels"
+                }
 
-                // Image Generation button
+                // Chat panel button
                 button {
-                    class: "w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center gap-3 transition-colors",
-                    onclick: move |_| on_toggle_image_gen.call(()),
+                    class: if matches!(active_panel(), ActivePanel::Chat) {
+                        "w-full py-2 px-3 bg-blue-600 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    } else {
+                        "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    },
+                    onclick: move |_| on_select_panel.call(ActivePanel::Chat),
                     svg {
-                        class: "w-5 h-5 text-white",
+                        class: "w-5 h-5",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        }
+                    }
+                    span { "Chat" }
+                }
+
+                // Image Generation panel button
+                button {
+                    class: if matches!(active_panel(), ActivePanel::ImageGen) {
+                        "w-full py-2 px-3 bg-purple-600 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    } else {
+                        "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    },
+                    onclick: move |_| on_select_panel.call(ActivePanel::ImageGen),
+                    svg {
+                        class: "w-5 h-5",
                         fill: "none",
                         stroke: "currentColor",
                         stroke_width: "2",
@@ -93,18 +126,30 @@ pub fn Sidebar(
                             d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                         }
                     }
-                    span {
-                        class: "text-white",
-                        "Image Gen"
-                    }
+                    span { "Image Gen" }
                 }
+
+                // Future panels (commented out for now)
+                // Video Gen
+                // button {
+                //     class: "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors opacity-50 cursor-not-allowed mb-2",
+                //     disabled: true,
+                //     svg { ... }
+                //     span { "Video Gen" }
+                //     span { class: "text-xs text-slate-500 ml-auto", "Soon" }
+                // }
+            }
+
+            // Footer with settings button
+            div {
+                class: "p-3 border-t border-gray-700 space-y-2",
 
                 // Settings button
                 button {
-                    class: "w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-3 transition-colors",
+                    class: "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors",
                     onclick: move |_| on_toggle_settings.call(()),
                     svg {
-                        class: "w-5 h-5 text-slate-300",
+                        class: "w-5 h-5 text-slate-400",
                         fill: "none",
                         stroke: "currentColor",
                         stroke_width: "2",
@@ -121,7 +166,7 @@ pub fn Sidebar(
                         }
                     }
                     span {
-                        class: "text-slate-300",
+                        class: "text-slate-400",
                         "Settings"
                     }
                 }

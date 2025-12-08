@@ -5,9 +5,23 @@ use crate::models::{Session, ChatMessage, AppSettings};
 use crate::server_functions::get_session_messages;
 use super::{Sidebar, Chat, SettingsPage, ImageGenPanel};
 
+/// Active panel types in the main content area
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum ActivePanel {
+    #[default]
+    Chat,
+    ImageGen,
+    // Future panels:
+    // VideoGen,
+    // ArticleWriter,
+}
+
 /// Main application component
 #[component]
 pub fn App() -> Element {
+    // Current active panel
+    let mut active_panel: Signal<ActivePanel> = use_signal(|| ActivePanel::Chat);
+
     // Current active session
     let mut current_session: Signal<Option<Session>> = use_signal(|| None);
 
@@ -27,13 +41,8 @@ pub fn App() -> Element {
     let settings: Signal<AppSettings> = use_signal(AppSettings::default);
     let mut show_settings: Signal<bool> = use_signal(|| false);
 
-    // Image generation panel state
-    let mut show_image_gen: Signal<bool> = use_signal(|| false);
-
     // Sidebar collapsed state
     let mut sidebar_collapsed: Signal<bool> = use_signal(|| false);
-
-    // Note: Sessions are loaded after SQLite initialization in Chat component
 
     // Get theme classes from settings
     let theme = settings.read().theme.clone();
@@ -64,19 +73,22 @@ pub fn App() -> Element {
                 }
             }
 
-            // Sidebar with session list
+            // Sidebar with session list and panel selector
             Sidebar {
                 sessions: sessions,
                 current_session: current_session,
+                active_panel: active_panel,
                 on_new_session: move |_| {
                     let new_session = Session::default_title();
                     sessions.write().insert(0, new_session.clone());
                     current_session.set(Some(new_session));
                     messages.write().clear();
+                    active_panel.set(ActivePanel::Chat);
                 },
                 on_select_session: move |session: Session| {
                     let session_id = session.id.to_string();
                     current_session.set(Some(session));
+                    active_panel.set(ActivePanel::Chat);
                     // Load messages for selected session
                     spawn(async move {
                         match get_session_messages(session_id).await {
@@ -93,15 +105,10 @@ pub fn App() -> Element {
                 on_toggle_settings: move |_| {
                     show_settings.set(!show_settings());
                 },
-                on_toggle_image_gen: move |_| {
-                    show_image_gen.set(!show_image_gen());
+                on_select_panel: move |panel: ActivePanel| {
+                    active_panel.set(panel);
                 },
                 sidebar_collapsed: sidebar_collapsed,
-            }
-
-            // Image generation panel
-            ImageGenPanel {
-                show_image_gen: show_image_gen,
             }
 
             // Settings page (full-page overlay)
@@ -112,7 +119,7 @@ pub fn App() -> Element {
                 }
             }
 
-            // Main chat area
+            // Main content area - changes based on active_panel
             div {
                 class: "flex-1 flex flex-col",
 
@@ -140,12 +147,18 @@ pub fn App() -> Element {
                         }
                     }
 
+                    // Dynamic title based on active panel
                     h1 {
                         class: "text-lg font-semibold",
-                        if let Some(session) = current_session() {
-                            "{session.title}"
-                        } else {
-                            "Local AI Assistant"
+                        match active_panel() {
+                            ActivePanel::Chat => {
+                                if let Some(session) = current_session() {
+                                    rsx! { "{session.title}" }
+                                } else {
+                                    rsx! { "Local AI Assistant" }
+                                }
+                            }
+                            ActivePanel::ImageGen => rsx! { "Image Generation" },
                         }
                     }
 
@@ -162,14 +175,23 @@ pub fn App() -> Element {
                     }
                 }
 
-                // Chat component
-                Chat {
-                    messages: messages,
-                    current_session: current_session,
-                    sessions: sessions,
-                    is_loading: is_loading,
-                    model_ready: model_ready,
-                    settings: settings,
+                // Content area based on active panel
+                match active_panel() {
+                    ActivePanel::Chat => rsx! {
+                        Chat {
+                            messages: messages,
+                            current_session: current_session,
+                            sessions: sessions,
+                            is_loading: is_loading,
+                            model_ready: model_ready,
+                            settings: settings,
+                        }
+                    },
+                    ActivePanel::ImageGen => rsx! {
+                        ImageGenPanel {
+                            embedded: true,
+                        }
+                    },
                 }
             }
         }

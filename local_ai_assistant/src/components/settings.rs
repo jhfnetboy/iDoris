@@ -4,7 +4,8 @@ use dioxus::prelude::*;
 use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize, ModelInfo, ModelStatus};
 use crate::server_functions::{
     list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile,
-    list_available_models, get_current_model, switch_llm_model
+    list_available_models, get_current_model, switch_llm_model,
+    is_image_model_ready, get_image_gen_status, ImageGenStatus
 };
 
 #[component]
@@ -60,6 +61,14 @@ pub fn SettingsPanel(
 
                 // Model Selection (Dynamic)
                 ModelSelector { settings: settings }
+
+                // Divider before Image Model
+                div {
+                    class: "border-t border-slate-600 my-4"
+                }
+
+                // Image Model Management (Phase 2.2)
+                ImageModelManager {}
 
                 // Response Language
                 div {
@@ -118,6 +127,30 @@ pub fn SettingsPanel(
 
                 // Context Management (RAG)
                 ContextManager {}
+
+                // Divider before close button
+                div {
+                    class: "border-t border-slate-600 my-4"
+                }
+
+                // Close Settings button (bottom)
+                button {
+                    class: "w-full py-3 px-4 bg-slate-600 hover:bg-slate-500 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2",
+                    onclick: move |_| show_settings.set(false),
+                    svg {
+                        class: "w-5 h-5",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M10 19l-7-7m0 0l7-7m-7 7h18"
+                        }
+                    }
+                    "Close Settings"
+                }
             }
         }
     }
@@ -571,6 +604,206 @@ fn ModelSelector(settings: Signal<AppSettings>) -> Element {
             div {
                 class: "text-xs text-slate-500 p-2 bg-slate-800 rounded border border-slate-700",
                 "⚠ Model switching requires app restart. Select your preferred model before initializing."
+            }
+        }
+    }
+}
+
+/// Image Model Manager Component for image generation model management (Phase 2.2)
+#[component]
+fn ImageModelManager() -> Element {
+    let mut model_ready: Signal<bool> = use_signal(|| false);
+    let mut status: Signal<ImageGenStatus> = use_signal(|| ImageGenStatus {
+        is_generating: false,
+        status: "Not initialized".to_string(),
+        progress: 0,
+    });
+    let mut is_loading: Signal<bool> = use_signal(|| false);
+
+    // Check model status on mount
+    use_effect(move || {
+        spawn(async move {
+            // Check if model is ready
+            match is_image_model_ready().await {
+                Ok(ready) => model_ready.set(ready),
+                Err(e) => println!("Error checking image model: {:?}", e),
+            }
+
+            // Get current status
+            match get_image_gen_status().await {
+                Ok(s) => status.set(s),
+                Err(e) => println!("Error getting image gen status: {:?}", e),
+            }
+        });
+    });
+
+    // Poll status while generating
+    use_effect(move || {
+        if status().is_generating {
+            spawn(async move {
+                loop {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        gloo_timers::future::TimeoutFuture::new(1000).await;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                    }
+
+                    match get_image_gen_status().await {
+                        Ok(s) => {
+                            let is_gen = s.is_generating;
+                            status.set(s);
+                            if !is_gen {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+        }
+    });
+
+    rsx! {
+        div {
+            class: "space-y-3",
+
+            // Header
+            div {
+                class: "flex items-center gap-2",
+                svg {
+                    class: "w-4 h-4 text-purple-400",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    view_box: "0 0 24 24",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    }
+                }
+                label {
+                    class: "block text-sm font-medium text-slate-300",
+                    "Image Generation Model"
+                }
+            }
+
+            // Model info card
+            div {
+                class: "p-3 bg-slate-700 rounded-lg space-y-2",
+
+                // Model name and status
+                div {
+                    class: "flex items-center justify-between",
+                    div {
+                        class: "text-white font-medium",
+                        "Wuerstchen"
+                    }
+                    div {
+                        class: if model_ready() {
+                            "text-xs px-2 py-1 rounded bg-green-600 text-white"
+                        } else {
+                            "text-xs px-2 py-1 rounded bg-amber-600 text-white"
+                        },
+                        if model_ready() { "Ready" } else { "Not Loaded" }
+                    }
+                }
+
+                // Model details
+                div {
+                    class: "text-xs text-slate-400",
+                    "Size: ~2GB | Resolution: up to 768x768"
+                }
+                div {
+                    class: "text-xs text-slate-500",
+                    "High-quality diffusion model for text-to-image generation"
+                }
+
+                // Status indicator
+                if status().is_generating || !status().status.is_empty() && status().status != "Not initialized" && status().status != "Ready" {
+                    div {
+                        class: "mt-2 p-2 bg-slate-600/50 rounded",
+                        div {
+                            class: "flex items-center justify-between text-xs",
+                            span {
+                                class: "text-slate-300",
+                                "{status().status}"
+                            }
+                            if status().progress > 0 {
+                                span {
+                                    class: "text-purple-400 font-medium",
+                                    "{status().progress}%"
+                                }
+                            }
+                        }
+                        if status().is_generating && status().progress > 0 {
+                            div {
+                                class: "mt-1 w-full bg-slate-600 rounded-full h-1.5 overflow-hidden",
+                                div {
+                                    class: "bg-purple-500 h-1.5 rounded-full transition-all duration-300",
+                                    style: "width: {status().progress}%",
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Info note - show different message based on model ready state
+            if model_ready() {
+                // Model is ready - show green success message
+                div {
+                    class: "text-xs text-green-400 p-2 bg-green-900/30 rounded border border-green-700",
+                    div { class: "flex items-start gap-2",
+                        svg {
+                            class: "w-4 h-4 text-green-400 flex-shrink-0 mt-0.5",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        div {
+                            "Model is ready. Click 'Image Gen' in the sidebar to generate images."
+                        }
+                    }
+                }
+            } else {
+                // Model not loaded - show download info
+                div {
+                    class: "text-xs text-slate-500 p-2 bg-slate-800 rounded border border-slate-700",
+                    div { class: "flex items-start gap-2",
+                        svg {
+                            class: "w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        div {
+                            "Model files (~2GB) will be downloaded automatically on first use. "
+                            "Download progress will show in the Image Gen panel."
+                        }
+                    }
+                }
+            }
+
+            // Help text about using image gen
+            div {
+                class: "text-xs text-slate-500",
+                "Click 'Image Gen' in the sidebar to open the generation panel."
             }
         }
     }
