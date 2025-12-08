@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use crate::models::{Session, ChatMessage, AppSettings};
 use crate::server_functions::get_session_messages;
-use super::{Sidebar, Chat, SettingsPanel};
+use super::{Sidebar, Chat, SettingsPage};
 
 /// Main application component
 #[component]
@@ -93,10 +93,12 @@ pub fn App() -> Element {
                 sidebar_collapsed: sidebar_collapsed,
             }
 
-            // Settings panel
-            SettingsPanel {
-                settings: settings,
-                show_settings: show_settings,
+            // Settings page (full-page overlay)
+            if show_settings() {
+                SettingsPage {
+                    settings: settings,
+                    on_close: move |_| show_settings.set(false),
+                }
             }
 
             // Main chat area

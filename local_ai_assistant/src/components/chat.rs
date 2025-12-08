@@ -631,30 +631,50 @@ fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatM
 
         let use_context_enabled = state.read().use_context;
 
-        // Build a more substantial prompt for short messages to ensure model responds
-        // Qwen 2.5 1.5B sometimes returns empty for very short greetings
-        let enhanced_message = if user_message.trim().len() < 10 {
-            format!("User says: '{}'. Please respond appropriately.", user_message)
-        } else {
-            user_message.clone()
-        };
-
-        // Prepend language instruction to the message
-        let mut final_message = format!("{} {}", language_instruction, enhanced_message);
-
-        // Get relevant context when enabled
-        if use_context_enabled {
+        // Build the final prompt with RAG context if enabled
+        let final_message = if use_context_enabled {
+            // Search for relevant context first
             match search_context(user_message.clone()).await {
-                Ok(context) => {
-                    let context_string = format!("\n\n[Potentially useful context:\n{}]", context);
-                    final_message.push_str(&context_string);
+                Ok(context) if !context.trim().is_empty() => {
+                    #[cfg(target_arch = "wasm32")]
+                    web_sys::console::log_1(&format!("[WASM] RAG context found: {}", &context[..context.len().min(200)]).into());
+
+                    // RAG prompt: Put context BEFORE the question with explicit instructions
+                    format!(
+                        "{}\n\n\
+                        You have access to the following reference information:\n\
+                        ---\n\
+                        {}\n\
+                        ---\n\n\
+                        Based on the reference information above, please answer this question:\n\
+                        {}\n\n\
+                        Important: Use the reference information to provide an accurate answer. If the reference doesn't contain relevant information, say so.",
+                        language_instruction,
+                        context,
+                        user_message
+                    )
+                },
+                Ok(_) => {
+                    #[cfg(target_arch = "wasm32")]
+                    web_sys::console::log_1(&"[WASM] RAG context was empty".into());
+                    format!("{} {}", language_instruction, user_message)
                 },
                 Err(e) => {
                     #[cfg(target_arch = "wasm32")]
                     web_sys::console::log_1(&format!("[WASM] Error searching context: {:?}", e).into());
+                    format!("{} {}", language_instruction, user_message)
                 }
             }
-        }
+        } else {
+            // No RAG - just use language instruction + message
+            // Build a more substantial prompt for short messages
+            let enhanced_message = if user_message.trim().len() < 10 {
+                format!("User says: '{}'. Please respond appropriately.", user_message)
+            } else {
+                user_message.clone()
+            };
+            format!("{} {}", language_instruction, enhanced_message)
+        };
 
         #[cfg(target_arch = "wasm32")]
         web_sys::console::log_1(&format!("[WASM] Calling get_response with: {}", final_message).into());
