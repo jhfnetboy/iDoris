@@ -639,16 +639,19 @@ fn process_response(mut state: Signal<ChatState>, mut messages: Signal<Vec<ChatM
                     #[cfg(target_arch = "wasm32")]
                     web_sys::console::log_1(&format!("[WASM] RAG context found: {}", &context[..context.len().min(200)]).into());
 
-                    // RAG prompt: Put context BEFORE the question with explicit instructions
+                    // Enhanced RAG prompt with stronger instructions
                     format!(
                         "{}\n\n\
-                        You have access to the following reference information:\n\
-                        ---\n\
-                        {}\n\
-                        ---\n\n\
-                        Based on the reference information above, please answer this question:\n\
-                        {}\n\n\
-                        Important: Use the reference information to provide an accurate answer. If the reference doesn't contain relevant information, say so.",
+=== REFERENCE DOCUMENTS ===\n\
+{}\n\
+=== END REFERENCES ===\n\n\
+INSTRUCTIONS:\n\
+1. Answer the following question using ONLY the reference documents above.\n\
+2. If the question relates to information in the references, cite the relevant reference number (e.g., \"According to Reference 1...\").\n\
+3. If the references don't contain relevant information for the question, clearly state: \"The provided context does not contain information about this topic.\"\n\
+4. Be concise and accurate. Do not make up information.\n\n\
+Question: {}\n\n\
+Answer:",
                         language_instruction,
                         context,
                         user_message

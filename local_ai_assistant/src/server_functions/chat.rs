@@ -151,6 +151,7 @@ pub async fn get_response(prompt: String) -> Result<TextStream> {
 /// Searches the database for relevant context given a query.
 ///
 /// Retrieves documents that match the query from the database.
+/// Results are filtered by similarity threshold and include relevance scores.
 ///
 /// # Arguments
 ///
@@ -158,23 +159,38 @@ pub async fn get_response(prompt: String) -> Result<TextStream> {
 ///
 /// # Returns
 ///
-/// * `Result<String>` - Formatted context string or error
+/// * `Result<String>` - Formatted context string with relevance scores or error
 #[server]
 pub async fn search_context(q: String) -> Result<String, ServerFnError> {
     #[cfg(feature = "server")]
     {
         println!("Searching context for query: {}", q);
-        let context = crate::core::vector_store::query(&q).await.map_err(|e| {
+        let documents = crate::core::vector_store::query(&q).await.map_err(|e| {
             println!("Error querying database: {}", e);
             ServerFnError::new(&format!("Error querying database: {}", e))
-        })?.into_iter()
-            .map(|document| {
+        })?;
+
+        if documents.is_empty() {
+            println!("No relevant documents found for query");
+            return Ok(String::new());
+        }
+
+        // Format with reference numbers and relevance scores
+        let context = documents.into_iter()
+            .enumerate()
+            .map(|(i, document)| {
                 format!(
-                    "Title: {}\nBody: {}\n",
+                    "[Reference {}] (Relevance: {:.0}%)\nTitle: {}\n{}\n",
+                    i + 1,
+                    document.score * 100.0,
                     document.title,
                     document.body
                 )
-            }).collect::<Vec<_>>().join("\n");
+            })
+            .collect::<Vec<_>>()
+            .join("\n---\n");
+
+        println!("Found {} relevant documents for RAG", context.matches("[Reference").count());
         Ok(context)
     }
     #[cfg(not(feature = "server"))]

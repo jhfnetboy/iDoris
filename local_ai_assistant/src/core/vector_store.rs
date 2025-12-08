@@ -26,6 +26,14 @@ const NAMESPACE: &str = "test";
 const DATABASE: &str = "test";
 const TABLE_NAME: &str = "documents";
 
+/// RAG search configuration constants
+/// Search more results initially to allow for filtering
+const SEARCH_RESULTS_COUNT: usize = 10;
+/// Minimum similarity threshold (BERT distance) - filter out low quality matches
+const SIMILARITY_THRESHOLD: f32 = 0.5;
+/// Maximum results to return after filtering
+const MAX_RESULTS: usize = 5;
+
 /// Get the project root directory
 fn get_project_root() -> PathBuf {
     // Fallback to the local_ai_assistant project directory
@@ -289,15 +297,32 @@ async fn create_embedding_from_query(
 }
 
 /// Performs semantic search using the embedding vector
-/// Returns up to 3 results for better RAG coverage
+/// Returns filtered results based on similarity threshold
 async fn perform_semantic_search(
     table: &DocumentTable<Db>,
     query_embed: Embedding
 ) -> Result<Vec<EmbeddingIndexedTableSearchResult<Document>>, String> {
-    table.search(query_embed)
-        .with_results(3)  // Return 3 results instead of 1 for better RAG coverage
+    let results = table.search(query_embed)
+        .with_results(SEARCH_RESULTS_COUNT)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Filter by similarity threshold and take top results
+    let filtered: Vec<_> = results
+        .into_iter()
+        .filter(|doc| {
+            let passes = doc.distance >= SIMILARITY_THRESHOLD;
+            println!("RAG result: score={:.3}, passes_threshold={}, title='{}'",
+                doc.distance, passes, doc.record.title().chars().take(50).collect::<String>());
+            passes
+        })
+        .take(MAX_RESULTS)
+        .collect();
+
+    println!("RAG search: {} results after filtering (threshold={}, max={})",
+        filtered.len(), SIMILARITY_THRESHOLD, MAX_RESULTS);
+
+    Ok(filtered)
 }
 
 /// Converts search results to SimpleDocument objects
