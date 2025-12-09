@@ -16,8 +16,8 @@ pub fn ImageGenPanel(
 ) -> Element {
     let mut prompt: Signal<String> = use_signal(|| "a small yellow dog is playing at the grass ground".to_string());
     let mut negative_prompt: Signal<String> = use_signal(String::new);
-    let mut width: Signal<u32> = use_signal(|| 1024);
-    let mut height: Signal<u32> = use_signal(|| 1024);
+    let mut width: Signal<u32> = use_signal(|| 512);
+    let mut height: Signal<u32> = use_signal(|| 512);
     let mut steps: Signal<u32> = use_signal(|| 4);  // Schnell default
     let mut show_advanced: Signal<bool> = use_signal(|| false);
     let mut is_generating: Signal<bool> = use_signal(|| false);
@@ -29,7 +29,7 @@ pub fn ImageGenPanel(
     let mut gen_status: Signal<String> = use_signal(|| String::new());
     let mut gen_progress: Signal<u8> = use_signal(|| 0);
     let mut selected_model: Signal<String> = use_signal(|| "schnell".to_string());  // schnell is free and reliable
-    let mut quantize: Signal<u8> = use_signal(|| 8);
+    let mut quantize: Signal<u8> = use_signal(|| 4);
 
     // Check if model is ready on mount
     use_effect(move || {
@@ -188,6 +188,64 @@ pub fn ImageGenPanel(
                     }
                 }
 
+                // Quick resolution presets
+                div {
+                    class: "space-y-2 p-3 bg-slate-700/50 rounded-lg",
+                    label {
+                        class: "block text-sm font-medium text-slate-300",
+                        "Quick Presets"
+                    }
+                    div {
+                        class: "flex flex-wrap gap-2",
+                        // Fast preset
+                        button {
+                            class: if width() == 512 && height() == 512 && quantize() == 4 {
+                                "px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white font-medium"
+                            } else {
+                                "px-3 py-1.5 text-sm rounded-lg bg-slate-600 text-slate-300 hover:bg-slate-500"
+                            },
+                            onclick: move |_| {
+                                width.set(512);
+                                height.set(512);
+                                quantize.set(4);
+                            },
+                            "Fast (512x512)"
+                        }
+                        // Balanced preset
+                        button {
+                            class: if width() == 768 && height() == 768 && quantize() == 4 {
+                                "px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white font-medium"
+                            } else {
+                                "px-3 py-1.5 text-sm rounded-lg bg-slate-600 text-slate-300 hover:bg-slate-500"
+                            },
+                            onclick: move |_| {
+                                width.set(768);
+                                height.set(768);
+                                quantize.set(4);
+                            },
+                            "Balanced (768x768)"
+                        }
+                        // Quality preset
+                        button {
+                            class: if width() == 1024 && height() == 1024 {
+                                "px-3 py-1.5 text-sm rounded-lg bg-purple-600 text-white font-medium"
+                            } else {
+                                "px-3 py-1.5 text-sm rounded-lg bg-slate-600 text-slate-300 hover:bg-slate-500"
+                            },
+                            onclick: move |_| {
+                                width.set(1024);
+                                height.set(1024);
+                                quantize.set(8);
+                            },
+                            "Quality (1024x1024)"
+                        }
+                    }
+                    p {
+                        class: "text-xs text-slate-500 mt-1",
+                        "Current: {width()}x{height()}, {quantize()}-bit"
+                    }
+                }
+
                 // Advanced settings toggle
                 button {
                     class: "flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors",
@@ -311,8 +369,8 @@ pub fn ImageGenPanel(
                                             quantize.set(v);
                                         }
                                     },
-                                    option { value: "8", "8-bit (Faster)" }
-                                    option { value: "4", "4-bit (Fastest)" }
+                                    option { value: "4", "4-bit (Fastest, Recommended)" }
+                                    option { value: "8", "8-bit (Better Quality)" }
                                 }
                             }
                         }
