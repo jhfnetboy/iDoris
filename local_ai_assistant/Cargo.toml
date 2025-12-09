@@ -35,12 +35,17 @@ scopeguard = { version = "1.2", optional = true }
 once_cell = { version = "1.19", optional = true }
 dirs = { version = "5.0", optional = true }
 
+# Phase 2.4 Content Workflow
+feed-rs = { version = "2.1", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
+readability = { version = "0.3", optional = true }
+
 [features]
 default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs"]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability"]
 
 [profile.wasm-dev]
 inherits = "dev"

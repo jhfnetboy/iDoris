@@ -3353,6 +3353,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "feed-rs"
+version = "2.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4c0591d23efd0d595099af69a31863ac1823046b1b021e3b06ba3aae7e00991"
+dependencies = [
+ "chrono",
+ "mediatype",
+ "quick-xml 0.37.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "siphasher 1.0.1",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "field-offset"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5820,6 +5837,7 @@ dependencies = [
  "comrak",
  "dioxus",
  "dirs 5.0.1",
+ "feed-rs",
  "futures",
  "gloo-net",
  "gloo-timers",
@@ -5827,6 +5845,8 @@ dependencies = [
  "js-sys",
  "kalosm",
  "once_cell",
+ "readability",
+ "reqwest 0.12.24",
  "rusqlite",
  "scopeguard",
  "serde",
@@ -6148,6 +6168,15 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
  "digest",
+]
+
+[[package]]
+name = "mediatype"
+version = "0.19.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33746aadcb41349ec291e7f2f0a3aa6834d1d7c58066fb4b01f68efc4c4b7631"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -8042,6 +8071,7 @@ dependencies = [
  "lazy_static",
  "markup5ever_rcdom",
  "regex",
+ "reqwest 0.11.27",
  "url",
 ]
 

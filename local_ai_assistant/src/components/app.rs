@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use crate::models::{Session, ChatMessage, AppSettings};
 use crate::server_functions::get_session_messages;
-use super::{Sidebar, Chat, SettingsPage, ImageGenPanel, TtsPanel};
+use super::{Sidebar, Chat, SettingsPage, ImageGenPanel, TtsPanel, ContentEditorPanel};
 
 /// Active panel types in the main content area
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -12,9 +12,9 @@ pub enum ActivePanel {
     Chat,
     ImageGen,
     Tts,
+    ContentEditor,
     // Future panels:
     // VideoGen,
-    // ArticleWriter,
 }
 
 /// Main application component
@@ -161,6 +161,7 @@ pub fn App() -> Element {
                             }
                             ActivePanel::ImageGen => rsx! { "Image Generation" },
                             ActivePanel::Tts => rsx! { "Text to Speech" },
+                            ActivePanel::ContentEditor => rsx! { "Content Editor" },
                         }
                     }
 
@@ -199,6 +200,13 @@ pub fn App() -> Element {
                     },
                     ActivePanel::Tts => rsx! {
                         TtsPanel {
+                            on_open_settings: EventHandler::new(move |_| {
+                                show_settings.set(true);
+                            }),
+                        }
+                    },
+                    ActivePanel::ContentEditor => rsx! {
+                        ContentEditorPanel {
                             on_open_settings: EventHandler::new(move |_| {
                                 show_settings.set(true);
                             }),

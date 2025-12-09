@@ -8,6 +8,7 @@ mod settings;
 mod settings_page;
 mod image_gen;
 mod tts_panel;
+mod content_editor;
 
 pub use app::{App, ActivePanel};
 pub use sidebar::Sidebar;
@@ -17,3 +18,4 @@ pub use settings::SettingsPanel;
 pub use settings_page::SettingsPage;
 pub use image_gen::ImageGenPanel;
 pub use tts_panel::TtsPanel;
+pub use content_editor::ContentEditorPanel;

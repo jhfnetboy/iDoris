@@ -152,6 +152,29 @@ pub fn Sidebar(
                     span { "Text to Speech" }
                 }
 
+                // Content Editor panel button
+                button {
+                    class: if matches!(active_panel(), ActivePanel::ContentEditor) {
+                        "w-full py-2 px-3 bg-orange-600 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    } else {
+                        "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    },
+                    onclick: move |_| on_select_panel.call(ActivePanel::ContentEditor),
+                    svg {
+                        class: "w-5 h-5",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        }
+                    }
+                    span { "Content Editor" }
+                }
+
                 // Future panels (commented out for now)
                 // Video Gen
                 // button {
