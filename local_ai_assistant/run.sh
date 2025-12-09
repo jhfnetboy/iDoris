@@ -31,6 +31,9 @@ print_error() {
 kill_existing() {
     print_status "Killing existing $APP_NAME processes..."
     pkill -f "$APP_NAME" 2>/dev/null || true
+    
+    print_status "Checking for process on port $PORT..."
+    lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
     sleep 1
 }
 

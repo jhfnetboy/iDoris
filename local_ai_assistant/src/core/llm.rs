@@ -264,6 +264,23 @@ pub fn try_get_stream(prompt: &str) -> Result<mpsc::UnboundedReceiver<String>, &
     Ok(rx)
 }
 
+/// Generates a complete response for the provided prompt.
+///
+/// This function waits for the full response to be generated and returns it as a String.
+/// Useful for non-streaming contexts like outline generation.
+pub async fn get_llm_response(prompt: String, _options: Option<()>) -> Result<String, String> {
+    use futures::StreamExt;
+
+    let mut rx = try_get_stream(&prompt).map_err(|e| e.to_string())?;
+    let mut response = String::new();
+
+    while let Some(token) = rx.next().await {
+        response.push_str(&token);
+    }
+
+    Ok(response)
+}
+
 /// Resets the chat session to start a new conversation
 ///
 /// # Returns

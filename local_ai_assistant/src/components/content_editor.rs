@@ -7,12 +7,14 @@
 use dioxus::prelude::*;
 
 use crate::models::content_template::{
-    ArticleTemplate, EditorContent, EditorSection, Platform,
-    WritingStyle, get_builtin_templates,
+    ArticleTemplate, EditorContent, EditorSection,
+    get_builtin_templates,
 };
 use crate::server_functions::{
     fetch_rss_entries, extract_article_content, generate_outline, expand_section,
+    generate_image_prompt,
 };
+use crate::server_functions::server_image_gen::generate_image_simple;
 
 /// Content Editor Panel component
 #[component]
@@ -30,16 +32,19 @@ pub fn ContentEditorPanel(
     let mut article_url = use_signal(|| String::new());
     let mut active_section: Signal<Option<usize>> = use_signal(|| None);
     let mut show_preview = use_signal(|| false);
+    
+    // File import state (unused for now but prepared for drag/drop)
+    let _drag_hover = use_signal(|| false);
 
     // Handle template selection
-    let handle_select_template = move |template: ArticleTemplate| {
+    let mut handle_select_template = move |template: ArticleTemplate| {
         let content = EditorContent::from_template(&template);
         editor_content.set(content);
         selected_template.set(Some(template));
     };
 
     // Handle RSS fetch
-    let handle_fetch_rss = move |_| {
+    let mut handle_fetch_rss = move |_| {
         let url = rss_url.read().clone();
         if url.trim().is_empty() {
             error_message.set(Some("Please enter an RSS URL".to_string()));
@@ -64,7 +69,7 @@ pub fn ContentEditorPanel(
     };
 
     // Handle article extraction
-    let handle_extract_article = move |_| {
+    let mut handle_extract_article = move |_| {
         let url = article_url.read().clone();
         if url.trim().is_empty() {
             error_message.set(Some("Please enter an article URL".to_string()));
@@ -94,7 +99,7 @@ pub fn ContentEditorPanel(
     };
 
     // Handle outline generation
-    let handle_generate_outline = move |_| {
+    let mut handle_generate_outline = move |_| {
         let title = editor_content.read().title.clone();
         let template_name = selected_template.read()
             .as_ref()
@@ -130,7 +135,7 @@ pub fn ContentEditorPanel(
     };
 
     // Handle section expansion
-    let handle_expand_section = move |index: usize| {
+    let mut handle_expand_section = move |index: usize| {
         let ec = editor_content.read().clone();
         if let Some(section) = ec.sections.get(index) {
             let section_title = section.title.clone();
@@ -155,6 +160,53 @@ pub fn ContentEditorPanel(
                         error_message.set(Some(format!("Failed to expand section: {:?}", e)));
                         is_generating.set(false);
                         active_section.set(None);
+                    }
+                }
+            });
+        }
+    };
+
+    // Handle Image Generation
+    let mut handle_generate_image = move |index: usize| {
+         let ec = editor_content.read().clone();
+        if let Some(section) = ec.sections.get(index) {
+            let content_sample = section.content.chars().take(1000).collect::<String>();
+            
+            if content_sample.trim().is_empty() {
+                error_message.set(Some("Section is empty. Generate text first.".to_string()));
+                return;
+            }
+
+            is_generating.set(true);
+            active_section.set(Some(index));
+
+            spawn(async move {
+                // 1. Generate Prompt
+                match generate_image_prompt(content_sample).await {
+                    Ok(prompt) => {
+                        // 2. Generate Image
+                         match generate_image_simple(prompt.clone()).await {
+                            Ok(data_url) => {
+                                let mut ec = editor_content.read().clone();
+                                if let Some(section) = ec.sections.get_mut(index) {
+                                    // Append image to content
+                                    section.content.push_str(&format!("\n\n![Generated Image]({})\n\n", data_url));
+                                }
+                                editor_content.set(ec);
+                                is_generating.set(false);
+                                active_section.set(None);
+                            },
+                            Err(e) => {
+                                error_message.set(Some(format!("Failed to generate image: {:?}", e)));
+                                is_generating.set(false);
+                                active_section.set(None);
+                            }
+                        }
+                    },
+                    Err(e) => {
+                         error_message.set(Some(format!("Failed to generate image prompt: {:?}", e)));
+                         is_generating.set(false);
+                         active_section.set(None);
                     }
                 }
             });
@@ -288,7 +340,7 @@ pub fn ContentEditorPanel(
 
                     // URL Import section
                     div {
-                        class: "p-4",
+                        class: "p-4 border-b border-slate-700",
                         h3 {
                             class: "text-sm font-semibold text-slate-300 mb-3",
                             "Article URL"
@@ -306,6 +358,34 @@ pub fn ContentEditorPanel(
                                 disabled: is_generating(),
                                 onclick: handle_extract_article,
                                 if is_generating() { "Extracting..." } else { "Extract Article" }
+                            }
+                        }
+                    }
+                    
+                    // Local File Import
+                    div {
+                        class: "p-4",
+                        h3 {
+                            class: "text-sm font-semibold text-slate-300 mb-3",
+                            "Local File"
+                        }
+                         div {
+                            class: "space-y-2",
+                            textarea {
+                                class: "w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm placeholder-slate-400",
+                                placeholder: "Paste file content here...",
+                                oninput: move |e| {
+                                     // Quick import via paste
+                                    let mut ec = editor_content.read().clone();
+                                    if let Some(section) = ec.sections.first_mut() {
+                                        section.content.push_str(&format!("\n\n{}", e.value()));
+                                    }
+                                    editor_content.set(ec);
+                                },
+                            }
+                            div {
+                                class: "text-xs text-slate-500",
+                                "Paste content to append to first section."
                             }
                         }
                     }
@@ -374,6 +454,25 @@ pub fn ContentEditorPanel(
                                             div {
                                                 class: "w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"
                                             }
+                                        }
+                                        // Generate Image Button
+                                        button {
+                                             class: "px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-1",
+                                             disabled: is_generating(),
+                                             onclick: move |_| handle_generate_image(index),
+                                             svg {
+                                                class: "w-3 h-3",
+                                                fill: "none",
+                                                stroke: "currentColor",
+                                                view_box: "0 0 24 24",
+                                                path {
+                                                    stroke_linecap: "round",
+                                                    stroke_linejoin: "round",
+                                                    stroke_width: "2",
+                                                    d: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                }
+                                             }
+                                             "Add Image"
                                         }
                                         button {
                                             class: "px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700",

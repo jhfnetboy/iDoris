@@ -173,7 +173,10 @@ pub async fn extract_article(url: &str) -> Result<Article, String> {
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    let readable = readability::extractor::extract(&mut html.as_bytes(), url)
+    let parsed_url = reqwest::Url::parse(url)
+        .map_err(|e| format!("Invalid URL: {}", e))?;
+
+    let readable = readability::extractor::extract(&mut html.as_bytes(), &parsed_url)
         .map_err(|e| format!("Failed to extract article: {}", e))?;
 
     let source_id = uuid::Uuid::new_v4().to_string();

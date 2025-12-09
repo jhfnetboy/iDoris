@@ -19,7 +19,7 @@ js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2.100"
 futures = "0.3.31"
-server_fn = "0.7"
+server_fn = { version = "0.7", features = ["default"] }
 comrak = "0.39.0"
 surrealdb = { version = "2.3.3", features = ["kv-surrealkv", "kv-mem"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
