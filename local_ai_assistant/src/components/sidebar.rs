@@ -129,6 +129,29 @@ pub fn Sidebar(
                     span { "Image Gen" }
                 }
 
+                // TTS panel button
+                button {
+                    class: if matches!(active_panel(), ActivePanel::Tts) {
+                        "w-full py-2 px-3 bg-green-600 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    } else {
+                        "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    },
+                    onclick: move |_| on_select_panel.call(ActivePanel::Tts),
+                    svg {
+                        class: "w-5 h-5",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        }
+                    }
+                    span { "Text to Speech" }
+                }
+
                 // Future panels (commented out for now)
                 // Video Gen
                 // button {

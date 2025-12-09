@@ -1,17 +1,15 @@
 //! Image Generation Implementation
 //!
 //! This module provides functionality for generating images from text prompts
-//! using the Wuerstchen model via Kalosm vision.
+//! using MFLUX (MLX-based Flux model) via subprocess.
 //!
-//! Phase 2.2: Image Generation Support
+//! Phase 2.2: Image Generation Support (MFLUX backend)
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use once_cell::sync::Lazy;
-use kalosm::vision::Wuerstchen;
-
-/// Global storage for image generation model - persists across requests
-static IMAGE_MODEL: Lazy<Mutex<Option<Wuerstchen>>> = Lazy::new(|| Mutex::new(None));
+use std::process::Command;
+use std::path::PathBuf;
 
 /// Flag to indicate if the model is currently generating
 static IS_GENERATING: AtomicBool = AtomicBool::new(false);
@@ -22,6 +20,50 @@ static GEN_STATUS: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()))
 /// Generation progress (0-100)
 static GEN_PROGRESS: AtomicU8 = AtomicU8::new(0);
 
+/// MFLUX model types
+#[derive(Clone, Debug, Default)]
+pub enum MfluxModel {
+    #[default]
+    Schnell,       // Fast, 4 steps
+    Dev,           // Higher quality, 20 steps
+    ZImageTurbo,   // Very fast, 9 steps
+}
+
+impl MfluxModel {
+    pub fn name(&self) -> &'static str {
+        match self {
+            MfluxModel::Schnell => "schnell",
+            MfluxModel::Dev => "dev",
+            MfluxModel::ZImageTurbo => "mlx-community/Z-Image-Turbo",
+        }
+    }
+
+    /// Returns the base model for custom models (needed for mflux --base-model parameter)
+    pub fn base_model(&self) -> Option<&'static str> {
+        match self {
+            MfluxModel::Schnell => None,  // Built-in, no base model needed
+            MfluxModel::Dev => None,      // Built-in, no base model needed
+            MfluxModel::ZImageTurbo => Some("schnell"),  // Based on schnell
+        }
+    }
+
+    pub fn default_steps(&self) -> u32 {
+        match self {
+            MfluxModel::Schnell => 4,
+            MfluxModel::Dev => 20,
+            MfluxModel::ZImageTurbo => 9,
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            MfluxModel::Schnell => "FLUX.1 Schnell (Fast)",
+            MfluxModel::Dev => "FLUX.1 Dev (Quality)",
+            MfluxModel::ZImageTurbo => "Z-Image Turbo (Very Fast)",
+        }
+    }
+}
+
 /// Image generation settings
 #[derive(Clone, Debug)]
 pub struct ImageGenSettings {
@@ -29,7 +71,10 @@ pub struct ImageGenSettings {
     pub negative_prompt: Option<String>,
     pub width: u32,
     pub height: u32,
-    pub num_steps: u32,
+    pub num_steps: Option<u32>,
+    pub model: MfluxModel,
+    pub quantize: Option<u8>,  // 4 or 8 bit quantization
+    pub seed: Option<u64>,
 }
 
 impl Default for ImageGenSettings {
@@ -37,9 +82,12 @@ impl Default for ImageGenSettings {
         Self {
             prompt: String::new(),
             negative_prompt: None,
-            width: 512,
-            height: 512,
-            num_steps: 30,
+            width: 1024,
+            height: 1024,
+            num_steps: None,  // Use model default
+            model: MfluxModel::Schnell,
+            quantize: Some(8),  // 8-bit quantization by default for speed
+            seed: None,
         }
     }
 }
@@ -64,7 +112,22 @@ impl ImageGenSettings {
     }
 
     pub fn with_steps(mut self, steps: u32) -> Self {
-        self.num_steps = steps;
+        self.num_steps = Some(steps);
+        self
+    }
+
+    pub fn with_model(mut self, model: MfluxModel) -> Self {
+        self.model = model;
+        self
+    }
+
+    pub fn with_quantize(mut self, bits: u8) -> Self {
+        self.quantize = Some(bits);
+        self
+    }
+
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
         self
     }
 }
@@ -89,57 +152,39 @@ impl GeneratedImage {
     }
 }
 
-/// Initialize the image generation model
+/// Check if mflux-generate command is available
+pub fn is_mflux_available() -> bool {
+    Command::new("mflux-generate")
+        .arg("--help")
+        .output()
+        .is_ok()
+}
+
+/// Get the output directory for generated images
+fn get_output_dir() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let output_dir = home.join(".local_ai_assistant").join("images");
+    std::fs::create_dir_all(&output_dir).ok();
+    output_dir
+}
+
+/// Initialize MFLUX (check if available)
 pub async fn init_image_model() -> Result<(), String> {
-    use kalosm::vision::ModelLoadingProgress;
+    set_status("Checking MFLUX...", 10);
 
-    // Check if already initialized
-    if is_initialized() {
-        println!("Image model already loaded, skipping initialization");
-        return Ok(());
+    if !is_mflux_available() {
+        set_status("MFLUX not found", 0);
+        return Err("MFLUX not installed. Install with: uv tool install mflux".to_string());
     }
 
-    println!("Initializing image generation model (Wuerstchen)...");
-    set_status("Downloading model...", 2);
-
-    let model = Wuerstchen::builder()
-        .build_with_loading_handler(|progress| {
-            let pct_f = progress.progress();
-            let pct = ((pct_f * 98.0) as u8 + 2).min(100);
-
-            match &progress {
-                ModelLoadingProgress::Downloading { source, .. } => {
-                    set_status(&format!("Downloading: {:.0}%", pct_f * 100.0), pct);
-                    println!("[ImageGen] Downloading {}: {:.1}%", source, pct_f * 100.0);
-                }
-                ModelLoadingProgress::Loading { .. } => {
-                    set_status(&format!("Loading: {:.0}%", pct_f * 100.0), pct);
-                    println!("[ImageGen] Loading into memory: {:.1}%", pct_f * 100.0);
-                }
-            }
-        })
-        .await
-        .map_err(|e| {
-            eprintln!("Error initializing Wuerstchen model: {}", e);
-            e.to_string()
-        })?;
-
-    // Store the model in global state
-    {
-        let mut model_guard = IMAGE_MODEL.lock().unwrap();
-        *model_guard = Some(model);
-    }
-
-    set_status("Ready", 0);
-    println!("Image generation model initialized successfully!");
+    set_status("Ready (MFLUX)", 0);
+    println!("[ImageGen] MFLUX is available");
     Ok(())
 }
 
-/// Check if the image model is initialized
+/// Check if MFLUX is available (no model state needed for CLI tool)
 pub fn is_initialized() -> bool {
-    IMAGE_MODEL.lock()
-        .map(|g| g.is_some())
-        .unwrap_or(false)
+    is_mflux_available()
 }
 
 /// Check if generation is in progress
@@ -165,12 +210,9 @@ fn set_status(status: &str, progress: u8) {
     println!("[ImageGen] {}: {}%", status, progress);
 }
 
-/// Generate an image from a text prompt
+/// Generate an image from a text prompt using MFLUX CLI
 pub async fn generate_image(settings: ImageGenSettings) -> Result<GeneratedImage, String> {
-    use kalosm::vision::WuerstchenInferenceSettings;
-    use futures::StreamExt;
-    use image::ImageFormat;
-    use std::io::Cursor;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     // Check if already generating
     if IS_GENERATING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
@@ -183,71 +225,104 @@ pub async fn generate_image(settings: ImageGenSettings) -> Result<GeneratedImage
         set_status("Ready", 0);
     });
 
-    set_status("Starting generation...", 1);
-    println!("Prompt: {}", settings.prompt);
+    set_status("Starting generation...", 5);
+    println!("[ImageGen] Prompt: {}", settings.prompt);
+    println!("[ImageGen] Model: {}", settings.model.display_name());
 
-    // Initialize model if not already done (downloads only once)
-    if !is_initialized() {
-        init_image_model().await?;
+    // Check if MFLUX is available
+    if !is_mflux_available() {
+        set_status("MFLUX not installed", 0);
+        return Err("MFLUX not installed. Install with: uv tool install mflux".to_string());
     }
 
-    set_status("Model loaded, preparing...", 20);
+    set_status("Preparing MFLUX...", 10);
 
-    set_status("Generating image...", 30);
+    // Generate unique output filename
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let output_dir = get_output_dir();
+    let output_file = output_dir.join(format!("image_{}.png", timestamp));
 
-    // Take the model out temporarily for generation (to avoid holding lock across await)
-    let model = {
-        let mut model_guard = IMAGE_MODEL.lock().map_err(|e| format!("Failed to lock model: {}", e))?;
-        model_guard.take().ok_or("Model not initialized")?
-    };
+    // Build mflux-generate command
+    let mut cmd = Command::new("mflux-generate");
 
-    // Build inference settings and run generation
-    let inference = WuerstchenInferenceSettings::new(&settings.prompt);
-    let total_steps = settings.num_steps;
-    let mut images = model.run(inference);
-    let mut last_image = None;
-    let mut step_count = 0;
+    // Model selection
+    cmd.arg("--model").arg(settings.model.name());
 
-    while let Some(image_result) = images.next().await {
-        step_count += 1;
-        let progress = 30 + ((step_count as f32 / total_steps as f32) * 60.0) as u8;
-        let progress = progress.min(90);
-        set_status(&format!("Step {}/{}", step_count, total_steps), progress);
-
-        if let Some(img) = image_result.generated_image() {
-            last_image = Some(img.clone());
-        }
+    // Add base model if needed (for custom HuggingFace models like Z-Image-Turbo)
+    if let Some(base) = settings.model.base_model() {
+        cmd.arg("--base-model").arg(base);
     }
 
-    // Put the model back
-    {
-        let mut model_guard = IMAGE_MODEL.lock().map_err(|e| format!("Failed to lock model: {}", e))?;
-        *model_guard = Some(model);
+    // Prompt
+    cmd.arg("--prompt").arg(&settings.prompt);
+
+    // Output path
+    cmd.arg("--output").arg(&output_file);
+
+    // Image dimensions
+    cmd.arg("--width").arg(settings.width.to_string());
+    cmd.arg("--height").arg(settings.height.to_string());
+
+    // Steps (use model default if not specified)
+    let steps = settings.num_steps.unwrap_or(settings.model.default_steps());
+    cmd.arg("--steps").arg(steps.to_string());
+
+    // Quantization
+    if let Some(q) = settings.quantize {
+        cmd.arg("--quantize").arg(q.to_string());
     }
 
-    set_status("Processing result...", 95);
+    // Seed
+    if let Some(seed) = settings.seed {
+        cmd.arg("--seed").arg(seed.to_string());
+    }
 
-    let generated_img = last_image.ok_or_else(|| {
-        set_status("Failed: No image generated", 0);
-        "No image generated".to_string()
+    set_status(&format!("Generating with {}...", settings.model.display_name()), 20);
+    println!("[ImageGen] Running: mflux-generate --model {} --prompt \"{}\" --width {} --height {} --steps {}",
+        settings.model.name(),
+        settings.prompt,
+        settings.width,
+        settings.height,
+        steps
+    );
+
+    // Run the command
+    let output = cmd.output().map_err(|e| {
+        set_status(&format!("Failed: {}", e), 0);
+        format!("Failed to run mflux-generate: {}", e)
     })?;
 
-    // Convert to PNG bytes
-    let mut png_bytes = Vec::new();
-    let mut cursor = Cursor::new(&mut png_bytes);
-    generated_img.write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| {
-            set_status(&format!("Failed: {}", e), 0);
-            format!("Failed to encode image: {}", e)
-        })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        set_status("Generation failed", 0);
+        eprintln!("[ImageGen] MFLUX stderr: {}", stderr);
+        return Err(format!("MFLUX generation failed: {}", stderr));
+    }
+
+    set_status("Reading generated image...", 90);
+
+    // Read the generated image
+    let png_bytes = std::fs::read(&output_file).map_err(|e| {
+        set_status(&format!("Failed: {}", e), 0);
+        format!("Failed to read generated image: {}", e)
+    })?;
+
+    // Get image dimensions using image crate
+    let img = image::load_from_memory(&png_bytes).map_err(|e| {
+        set_status(&format!("Failed: {}", e), 0);
+        format!("Failed to parse image: {}", e)
+    })?;
 
     set_status("Complete!", 100);
-    println!("Image generated successfully! Size: {} bytes", png_bytes.len());
+    println!("[ImageGen] Image generated successfully! Size: {} bytes", png_bytes.len());
 
     Ok(GeneratedImage {
         data: png_bytes,
-        width: generated_img.width(),
-        height: generated_img.height(),
+        width: img.width(),
+        height: img.height(),
         format: "png".to_string(),
     })
 }

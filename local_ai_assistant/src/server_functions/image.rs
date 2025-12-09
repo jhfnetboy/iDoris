@@ -102,15 +102,17 @@ pub async fn get_image_gen_status() -> Result<ImageGenStatus, ServerFnError> {
     }
 }
 
-/// Generates an image from a text prompt.
+/// Generates an image from a text prompt using MFLUX.
 ///
 /// # Arguments
 ///
 /// * `prompt` - The text prompt describing the image to generate
 /// * `negative_prompt` - Optional negative prompt to avoid certain elements
-/// * `width` - Image width (default: 512)
-/// * `height` - Image height (default: 512)
-/// * `steps` - Number of inference steps (default: 30)
+/// * `width` - Image width (default: 1024)
+/// * `height` - Image height (default: 1024)
+/// * `steps` - Number of inference steps (uses model default if None)
+/// * `model` - MFLUX model: "schnell" (fast), "dev" (quality), "z-image-turbo" (very fast)
+/// * `quantize` - Quantization bits: 4 or 8 (default: 8)
 ///
 /// # Returns
 ///
@@ -122,10 +124,12 @@ pub async fn generate_image(
     width: Option<u32>,
     height: Option<u32>,
     steps: Option<u32>,
+    model: Option<String>,
+    quantize: Option<u8>,
 ) -> Result<ImageResult, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::core::image_gen::{ImageGenSettings, generate_image as gen_img};
+        use crate::core::image_gen::{ImageGenSettings, MfluxModel, generate_image as gen_img};
 
         let mut settings = ImageGenSettings::new(&prompt);
 
@@ -141,6 +145,20 @@ pub async fn generate_image(
             settings = settings.with_steps(s);
         }
 
+        // Parse model selection
+        if let Some(m) = model {
+            let mflux_model = match m.as_str() {
+                "dev" => MfluxModel::Dev,
+                "z-image-turbo" => MfluxModel::ZImageTurbo,
+                _ => MfluxModel::Schnell, // Default to schnell
+            };
+            settings = settings.with_model(mflux_model);
+        }
+
+        if let Some(q) = quantize {
+            settings = settings.with_quantize(q);
+        }
+
         let image = gen_img(settings).await.map_err(|e| {
             ServerFnError::new(&format!("Error generating image: {}", e))
         })?;
@@ -153,7 +171,7 @@ pub async fn generate_image(
     }
     #[cfg(not(feature = "server"))]
     {
-        let _ = (prompt, negative_prompt, width, height, steps);
+        let _ = (prompt, negative_prompt, width, height, steps, model, quantize);
         Err(ServerFnError::new("Image generation not available on client"))
     }
 }

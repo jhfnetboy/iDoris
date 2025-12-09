@@ -7,6 +7,7 @@ mod message;
 mod settings;
 mod settings_page;
 mod image_gen;
+mod tts_panel;
 
 pub use app::{App, ActivePanel};
 pub use sidebar::Sidebar;
@@ -15,3 +16,4 @@ pub use message::Message;
 pub use settings::SettingsPanel;
 pub use settings_page::SettingsPage;
 pub use image_gen::ImageGenPanel;
+pub use tts_panel::TtsPanel;

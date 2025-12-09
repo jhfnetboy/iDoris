@@ -14,18 +14,22 @@ pub fn ImageGenPanel(
     embedded: bool,
     on_open_settings: Option<EventHandler<()>>,
 ) -> Element {
-    let mut prompt: Signal<String> = use_signal(String::new);
+    let mut prompt: Signal<String> = use_signal(|| "a small yellow dog is playing at the grass ground".to_string());
     let mut negative_prompt: Signal<String> = use_signal(String::new);
-    let mut width: Signal<u32> = use_signal(|| 512);
-    let mut height: Signal<u32> = use_signal(|| 512);
-    let mut steps: Signal<u32> = use_signal(|| 30);
+    let mut width: Signal<u32> = use_signal(|| 1024);
+    let mut height: Signal<u32> = use_signal(|| 1024);
+    let mut steps: Signal<u32> = use_signal(|| 4);  // Schnell default
     let mut show_advanced: Signal<bool> = use_signal(|| false);
     let mut is_generating: Signal<bool> = use_signal(|| false);
     let mut generated_image: Signal<Option<ImageResult>> = use_signal(|| None);
     let mut error_message: Signal<Option<String>> = use_signal(|| None);
+    let mut generation_time_ms: Signal<Option<u64>> = use_signal(|| None);
+    let mut start_time: Signal<Option<f64>> = use_signal(|| None);
     let mut model_ready: Signal<bool> = use_signal(|| false);
     let mut gen_status: Signal<String> = use_signal(|| String::new());
     let mut gen_progress: Signal<u8> = use_signal(|| 0);
+    let mut selected_model: Signal<String> = use_signal(|| "schnell".to_string());  // schnell is free and reliable
+    let mut quantize: Signal<u8> = use_signal(|| 8);
 
     // Check if model is ready on mount
     use_effect(move || {
@@ -153,6 +157,37 @@ pub fn ImageGenPanel(
                     }
                 }
 
+                // Model selection - always visible
+                div {
+                    class: "space-y-2 p-3 bg-slate-700/50 rounded-lg",
+                    label {
+                        class: "block text-sm font-medium text-slate-300",
+                        "MFLUX Model"
+                    }
+                    select {
+                        class: "w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500",
+                        value: "{selected_model}",
+                        onchange: move |e| {
+                            let model = e.value();
+                            selected_model.set(model.clone());
+                            // Update default steps based on model
+                            let default_steps = match model.as_str() {
+                                "dev" => 20,
+                                "z-image-turbo" => 9,
+                                _ => 4, // schnell
+                            };
+                            steps.set(default_steps);
+                        },
+                        option { value: "schnell", "FLUX.1 Schnell (4 steps, fast)" }
+                        option { value: "dev", "FLUX.1 Dev (20 steps, quality)" }
+                        option { value: "z-image-turbo", "Z-Image Turbo (9 steps)" }
+                    }
+                    p {
+                        class: "text-xs text-amber-400 mt-1",
+                        "⚠️ All FLUX models require HF login: hf auth login"
+                    }
+                }
+
                 // Advanced settings toggle
                 button {
                     class: "flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors",
@@ -169,7 +204,7 @@ pub fn ImageGenPanel(
                             d: "M9 5l7 7-7 7"
                         }
                     }
-                    "Advanced Settings"
+                    "More Settings"
                 }
 
                 // Advanced settings
@@ -210,11 +245,10 @@ pub fn ImageGenPanel(
                                             width.set(v);
                                         }
                                     },
-                                    option { value: "256", "256px" }
-                                    option { value: "384", "384px" }
-                                    option { value: "512", selected: true, "512px" }
-                                    option { value: "640", "640px" }
+                                    option { value: "512", "512px" }
                                     option { value: "768", "768px" }
+                                    option { value: "1024", "1024px" }
+                                    option { value: "1280", "1280px" }
                                 }
                             }
                             div {
@@ -231,38 +265,55 @@ pub fn ImageGenPanel(
                                             height.set(v);
                                         }
                                     },
-                                    option { value: "256", "256px" }
-                                    option { value: "384", "384px" }
-                                    option { value: "512", selected: true, "512px" }
-                                    option { value: "640", "640px" }
+                                    option { value: "512", "512px" }
                                     option { value: "768", "768px" }
+                                    option { value: "1024", "1024px" }
+                                    option { value: "1280", "1280px" }
                                 }
                             }
                         }
 
-                        // Steps slider
+                        // Steps and Quantization
                         div {
-                            class: "space-y-2",
-                            label {
-                                class: "block text-sm font-medium text-slate-300",
-                                "Inference Steps: {steps}"
-                            }
-                            input {
-                                r#type: "range",
-                                class: "w-full",
-                                min: "10",
-                                max: "50",
-                                value: "{steps}",
-                                oninput: move |e| {
-                                    if let Ok(v) = e.value().parse::<u32>() {
-                                        steps.set(v);
-                                    }
-                                },
-                            }
+                            class: "grid grid-cols-2 gap-4",
+                            // Steps slider
                             div {
-                                class: "flex justify-between text-xs text-slate-500",
-                                span { "10 (Fast)" }
-                                span { "50 (Quality)" }
+                                class: "space-y-2",
+                                label {
+                                    class: "block text-sm font-medium text-slate-300",
+                                    "Steps: {steps}"
+                                }
+                                input {
+                                    r#type: "range",
+                                    class: "w-full",
+                                    min: "1",
+                                    max: "30",
+                                    value: "{steps}",
+                                    oninput: move |e| {
+                                        if let Ok(v) = e.value().parse::<u32>() {
+                                            steps.set(v);
+                                        }
+                                    },
+                                }
+                            }
+                            // Quantization
+                            div {
+                                class: "space-y-2",
+                                label {
+                                    class: "block text-sm font-medium text-slate-300",
+                                    "Quantization"
+                                }
+                                select {
+                                    class: "w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500",
+                                    value: "{quantize}",
+                                    onchange: move |e| {
+                                        if let Ok(v) = e.value().parse::<u8>() {
+                                            quantize.set(v);
+                                        }
+                                    },
+                                    option { value: "8", "8-bit (Faster)" }
+                                    option { value: "4", "4-bit (Fastest)" }
+                                }
                             }
                         }
                     }
@@ -316,12 +367,28 @@ pub fn ImageGenPanel(
                         let w = width();
                         let h = height();
                         let s = steps();
+                        let model = selected_model();
+                        let quant = quantize();
 
                         if !p.is_empty() {
                             is_generating.set(true);
                             error_message.set(None);
                             gen_status.set("Starting...".to_string());
                             gen_progress.set(0);
+                            generation_time_ms.set(None);
+
+                            // Record start time using js_sys for WASM
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                start_time.set(Some(js_sys::Date::now()));
+                            }
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                start_time.set(Some(std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis() as f64));
+                            }
 
                             // Start status polling in a separate task
                             spawn(async move {
@@ -351,9 +418,26 @@ pub fn ImageGenPanel(
 
                             // Start the actual generation
                             spawn(async move {
-                                match generate_image(p, neg, Some(w), Some(h), Some(s)).await {
+                                match generate_image(p, neg, Some(w), Some(h), Some(s), Some(model), Some(quant)).await {
                                     Ok(result) => {
                                         generated_image.set(Some(result));
+                                        // Calculate generation time
+                                        if let Some(start) = start_time() {
+                                            #[cfg(target_arch = "wasm32")]
+                                            {
+                                                let elapsed = (js_sys::Date::now() - start) as u64;
+                                                generation_time_ms.set(Some(elapsed));
+                                            }
+                                            #[cfg(not(target_arch = "wasm32"))]
+                                            {
+                                                let now = std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH)
+                                                    .unwrap()
+                                                    .as_millis() as f64;
+                                                let elapsed = (now - start) as u64;
+                                                generation_time_ms.set(Some(elapsed));
+                                            }
+                                        }
                                     }
                                     Err(e) => {
                                         error_message.set(Some(format!("Generation failed: {}", e)));
@@ -413,9 +497,25 @@ pub fn ImageGenPanel(
                         class: "space-y-3",
                         div {
                             class: "flex items-center justify-between",
-                            h3 {
-                                class: "text-sm font-medium text-slate-300",
-                                "Generated Image ({img.width}×{img.height})"
+                            div {
+                                class: "flex items-center gap-3",
+                                h3 {
+                                    class: "text-sm font-medium text-slate-300",
+                                    "Generated Image ({img.width}×{img.height})"
+                                }
+                                // Show generation time
+                                if let Some(time_ms) = generation_time_ms() {
+                                    span {
+                                        class: "text-xs text-green-400 bg-green-900/30 px-2 py-0.5 rounded",
+                                        {
+                                            if time_ms >= 60000 {
+                                                format!("⏱ {}m {:.1}s", time_ms / 60000, (time_ms % 60000) as f64 / 1000.0)
+                                            } else {
+                                                format!("⏱ {:.1}s", time_ms as f64 / 1000.0)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             div {
                                 class: "flex gap-2",

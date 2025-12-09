@@ -11,7 +11,6 @@ use crate::server_functions::{
 #[derive(Clone, PartialEq, Default)]
 pub enum SettingsTab {
     #[default]
-    General,
     Models,
     Appearance,
     Language,
@@ -84,7 +83,26 @@ pub fn SettingsPage(
                 // Sidebar navigation
                 nav {
                     class: "w-56 bg-slate-800/50 border-r border-slate-700 p-4 space-y-1",
-                    { render_nav_item(active_tab.clone(), SettingsTab::General, "General", "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z") }
+
+                    // Back button at the top
+                    button {
+                        class: "w-full flex items-center gap-3 px-3 py-2 mb-4 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors border border-slate-600 hover:border-slate-500",
+                        onclick: move |_| on_close.call(()),
+                        svg {
+                            class: "w-5 h-5",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M10 19l-7-7m0 0l7-7m-7 7h18"
+                            }
+                        }
+                        "Back"
+                    }
+
                     { render_nav_item(active_tab.clone(), SettingsTab::Models, "Models", "M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z") }
                     { render_nav_item(active_tab.clone(), SettingsTab::Appearance, "Appearance", "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01") }
                     { render_nav_item(active_tab.clone(), SettingsTab::Language, "Language", "M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129") }
@@ -97,7 +115,6 @@ pub fn SettingsPage(
                 div {
                     class: "flex-1 overflow-y-auto p-6",
                     match active_tab() {
-                        SettingsTab::General => rsx! { GeneralSettings { settings: settings } },
                         SettingsTab::Models => rsx! { ModelsSettings { settings: settings } },
                         SettingsTab::Appearance => rsx! { AppearanceSettings { settings: settings } },
                         SettingsTab::Language => rsx! { LanguageSettings { settings: settings } },
@@ -140,77 +157,6 @@ fn render_nav_item(mut active_tab: Signal<SettingsTab>, tab: SettingsTab, label:
     }
 }
 
-/// General settings section
-#[component]
-fn GeneralSettings(settings: Signal<AppSettings>) -> Element {
-    let current = settings.read().clone();
-
-    rsx! {
-        div {
-            class: "max-w-2xl space-y-6",
-
-            // Section header
-            h2 {
-                class: "text-lg font-semibold text-white mb-4",
-                "General Settings"
-            }
-
-            // AI Model Selection
-            div {
-                class: "bg-slate-800 rounded-lg p-4 space-y-3",
-                label {
-                    class: "block text-sm font-medium text-slate-300 mb-2",
-                    "AI Model"
-                }
-                p {
-                    class: "text-xs text-slate-500 mb-3",
-                    "Select the language model for generating responses"
-                }
-                select {
-                    class: "w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500",
-                    value: "{current.model_name}",
-                    onchange: {
-                        let mut settings = settings.clone();
-                        move |e: Event<FormData>| {
-                            let mut s = settings.read().clone();
-                            s.model_name = e.value();
-                            settings.set(s);
-                        }
-                    },
-                    option { value: "Qwen 2.5 7B", "Qwen 2.5 7B (Recommended)" }
-                    option { value: "Qwen 2.5 3B", "Qwen 2.5 3B (Faster)" }
-                    option { value: "Llama 3.2 8B", "Llama 3.2 8B" }
-                }
-            }
-
-            // Model Info
-            div {
-                class: "bg-slate-800/50 rounded-lg p-4 border border-slate-700",
-                div {
-                    class: "flex items-start gap-3",
-                    svg {
-                        class: "w-5 h-5 text-blue-400 mt-0.5",
-                        fill: "none",
-                        stroke: "currentColor",
-                        stroke_width: "2",
-                        view_box: "0 0 24 24",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        }
-                    }
-                    div {
-                        class: "text-sm text-slate-400",
-                        p { "Models are downloaded automatically on first use." }
-                        p { class: "mt-1", "Qwen 2.5 7B requires ~5GB of disk space." }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Models settings section - Chat Model and Image Gen Model
 #[component]
 fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
@@ -219,6 +165,7 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
     let mut image_model_downloading: Signal<bool> = use_signal(|| false);
     let mut download_status: Signal<String> = use_signal(|| "Not downloaded".to_string());
     let mut download_progress: Signal<u8> = use_signal(|| 0);
+    let mut voice_model_ready: Signal<bool> = use_signal(|| false);
 
     // Check image model status on mount
     use_effect(move || {
@@ -231,6 +178,16 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                     }
                 }
                 Err(_) => image_model_ready.set(false),
+            }
+        });
+    });
+
+    // Check voice model status on mount
+    use_effect(move || {
+        spawn(async move {
+            match crate::server_functions::is_vibevoice_available().await {
+                Ok(ready) => voice_model_ready.set(ready),
+                Err(_) => voice_model_ready.set(false),
             }
         });
     });
@@ -300,7 +257,7 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                 }
             }
 
-            // Image Generation Model Section
+            // Image Generation Model Section (MFLUX)
             div {
                 class: "bg-slate-800 rounded-lg p-4 space-y-4",
                 div {
@@ -319,13 +276,13 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                     }
                     h3 {
                         class: "text-md font-medium text-white",
-                        "Image Generation Model"
+                        "Image Generation (MFLUX)"
                     }
                 }
 
                 p {
                     class: "text-xs text-slate-400 mb-3",
-                    "Wuerstchen model for generating images from text prompts"
+                    "FLUX models for high-quality image generation (Apple Silicon optimized)"
                 }
 
                 // Model info card
@@ -333,13 +290,13 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                     class: "p-3 bg-slate-700/50 rounded-lg space-y-2",
                     div {
                         class: "flex justify-between text-sm",
-                        span { class: "text-slate-400", "Model" }
-                        span { class: "text-white", "Wuerstchen" }
+                        span { class: "text-slate-400", "Backend" }
+                        span { class: "text-white", "MFLUX (MLX)" }
                     }
                     div {
                         class: "flex justify-between text-sm",
-                        span { class: "text-slate-400", "Size" }
-                        span { class: "text-white", "~2GB" }
+                        span { class: "text-slate-400", "Models" }
+                        span { class: "text-white", "schnell / dev / z-image-turbo" }
                     }
                     div {
                         class: "flex justify-between text-sm",
@@ -351,78 +308,38 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                     }
                 }
 
-                // Download progress (shown during download)
-                if image_model_downloading() {
+                // Installation instructions
+                if !image_model_ready() {
                     div {
-                        class: "space-y-2",
-                        div {
-                            class: "flex items-center justify-between text-sm",
-                            span { class: "text-slate-300", "{download_status}" }
-                            span { class: "text-purple-400", "{download_progress}%" }
+                        class: "p-3 bg-yellow-900/30 border border-yellow-800 rounded-lg space-y-2",
+                        p {
+                            class: "text-sm text-yellow-200 font-medium",
+                            "Installation Required"
                         }
-                        div {
-                            class: "w-full bg-slate-600 rounded-full h-2 overflow-hidden",
-                            div {
-                                class: "bg-purple-500 h-2 rounded-full transition-all duration-300",
-                                style: "width: {download_progress}%",
-                            }
+                        p {
+                            class: "text-xs text-yellow-300/80",
+                            "Run in Terminal:"
+                        }
+                        code {
+                            class: "block p-2 bg-slate-900 rounded text-purple-400 text-sm font-mono",
+                            "uv tool install mflux"
+                        }
+                        p {
+                            class: "text-xs text-yellow-300/70 mt-2",
+                            "Models download automatically on first use (~10GB for schnell)"
+                        }
+                        p {
+                            class: "text-xs text-green-300/80 mt-2",
+                            "Tip: Use 'z-image-turbo' model - no HuggingFace login required!"
                         }
                     }
-                }
 
-                // Download / Status button
-                if image_model_ready() {
-                    div {
-                        class: "flex items-center gap-2 p-3 bg-green-900/30 border border-green-800 rounded-lg",
-                        svg {
-                            class: "w-5 h-5 text-green-400",
-                            fill: "none",
-                            stroke: "currentColor",
-                            stroke_width: "2",
-                            view_box: "0 0 24 24",
-                            path {
-                                stroke_linecap: "round",
-                                stroke_linejoin: "round",
-                                d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                            }
-                        }
-                        span { class: "text-green-300 text-sm", "Model downloaded and ready to use" }
-                    }
-                } else if !image_model_downloading() {
+                    // Check status button
                     button {
                         class: "w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2",
                         onclick: move |_| {
                             image_model_downloading.set(true);
-                            download_status.set("Starting download...".to_string());
-                            download_progress.set(0);
-
-                            // Start status polling
-                            spawn(async move {
-                                loop {
-                                    #[cfg(target_arch = "wasm32")]
-                                    {
-                                        gloo_timers::future::TimeoutFuture::new(500).await;
-                                    }
-                                    #[cfg(not(target_arch = "wasm32"))]
-                                    {
-                                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                                    }
-
-                                    if !image_model_downloading() {
-                                        break;
-                                    }
-
-                                    match get_image_gen_status().await {
-                                        Ok(status) => {
-                                            download_status.set(status.status);
-                                            download_progress.set(status.progress);
-                                        }
-                                        Err(_) => {}
-                                    }
-                                }
-                            });
-
-                            // Start download
+                            download_status.set("Checking...".to_string());
                             spawn(async move {
                                 match init_image_model().await {
                                     Ok(_) => {
@@ -445,10 +362,118 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                             path {
                                 stroke_linecap: "round",
                                 stroke_linejoin: "round",
-                                d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                             }
                         }
-                        "Download Image Model (~2GB)"
+                        "Check MFLUX Status"
+                    }
+                } else {
+                    div {
+                        class: "flex items-center gap-2 p-3 bg-green-900/30 border border-green-800 rounded-lg",
+                        svg {
+                            class: "w-5 h-5 text-green-400",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        span { class: "text-green-300 text-sm", "MFLUX installed and ready" }
+                    }
+                }
+            }
+
+            // Voice Model Section (VibeVoice)
+            div {
+                class: "bg-slate-800 rounded-lg p-4 space-y-4",
+                div {
+                    class: "flex items-center gap-2 mb-3",
+                    svg {
+                        class: "w-5 h-5 text-green-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                        }
+                    }
+                    h3 {
+                        class: "text-md font-medium text-white",
+                        "Voice Model (VibeVoice)"
+                    }
+                }
+
+                p {
+                    class: "text-xs text-slate-400 mb-3",
+                    "Microsoft VibeVoice-Realtime-0.5B for natural text-to-speech"
+                }
+
+                // Model info card
+                div {
+                    class: "p-3 bg-slate-700/50 rounded-lg space-y-2",
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Model" }
+                        span { class: "text-white", "VibeVoice-Realtime-0.5B" }
+                    }
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Size" }
+                        span { class: "text-white", "~1GB" }
+                    }
+                    div {
+                        class: "flex justify-between text-sm",
+                        span { class: "text-slate-400", "Latency" }
+                        span { class: "text-white", "~300ms" }
+                    }
+                }
+
+                // Show status based on voice_model_ready
+                if !voice_model_ready() {
+                    // Installation instructions
+                    div {
+                        class: "p-3 bg-yellow-900/30 border border-yellow-800 rounded-lg space-y-2",
+                        p {
+                            class: "text-sm text-yellow-200 font-medium",
+                            "Manual Download Required"
+                        }
+                        p {
+                            class: "text-xs text-yellow-300/80",
+                            "Run in Terminal:"
+                        }
+                        code {
+                            class: "block p-2 bg-slate-900 rounded text-green-400 text-xs font-mono whitespace-pre-wrap break-all",
+                            "mkdir -p ~/models && python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('microsoft/VibeVoice-Realtime-0.5B', local_dir=__import__('os').path.expanduser('~/models/VibeVoice-Realtime-0.5B'))\""
+                        }
+                        p {
+                            class: "text-xs text-yellow-300/70 mt-2",
+                            "Or use System TTS (macOS built-in) as alternative"
+                        }
+                    }
+                } else {
+                    // Ready status
+                    div {
+                        class: "flex items-center gap-2 p-3 bg-green-900/30 border border-green-800 rounded-lg",
+                        svg {
+                            class: "w-5 h-5 text-green-400",
+                            fill: "none",
+                            stroke: "currentColor",
+                            stroke_width: "2",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                d: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            }
+                        }
+                        span { class: "text-green-300 text-sm", "VibeVoice model downloaded and ready" }
                     }
                 }
             }
