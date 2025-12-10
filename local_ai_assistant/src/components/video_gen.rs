@@ -343,24 +343,41 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                 // Results
                 if let Some(result) = generation_result.read().clone() {
                     div { class: "mt-6 border-t pt-6",
-                        h3 { class: "text-lg font-semibold mb-4", "Result" }
+                        h3 { class: "text-lg font-semibold mb-4 text-gray-900", "Generation Result" }
                         div { class: "bg-gray-50 rounded-lg p-4",
                             div { class: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-4",
                                 div {
                                     span { class: "text-sm text-gray-600", "Duration: " }
-                                    span { class: "font-medium", "Finished" }
+                                    span { class: "font-medium text-gray-900", "{result.duration_seconds}s" }
                                 }
                                 div {
-                                    span { class: "text-sm text-gray-600", "Actual Cost: " }
-                                    span { class: "font-medium", "Calculated" }
+                                    span { class: "text-sm text-gray-600", "Cost: " }
+                                    span { class: "font-medium text-gray-900", "${result.cost_estimate:.4}" }
                                 }
                                 div {
                                     span { class: "text-sm text-gray-600", "Status: " }
-                                    span { class: "font-medium text-green-600", "Completed" }
+                                    span { 
+                                        class: "font-medium text-green-600", 
+                                        {format!("{:?}", result.status)}
+                                    }
                                 }
                                 div {
                                     span { class: "text-sm text-gray-600", "Task ID: " }
-                                    span { class: "font-mono text-xs", "Task ID" }
+                                    span { 
+                                        class: "font-mono text-xs text-gray-900", 
+                                        title: "{result.generation_id}",
+                                        {result.generation_id.chars().take(16).collect::<String>()}
+                                        "..."
+                                    }
+                                }
+                            }
+
+                            // Video URL Info
+                            div { class: "mb-4 p-3 bg-blue-50 border border-blue-200 rounded",
+                                p { class: "text-xs font-medium text-blue-900 mb-1", "Video URL:" }
+                                p { 
+                                    class: "text-xs text-blue-700 break-all font-mono",
+                                    {result.video_url.clone()}
                                 }
                             }
 
@@ -368,19 +385,40 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                             div { class: "space-y-2",
                                 video {
                                     controls: true,
+                                    autoplay: false,
                                     width: "100%",
                                     max_width: "640",
-                                    class: "rounded-lg shadow-md",
-                                    source { src: result.video_url.clone(), r#type: "video/mp4" }
-                                    "Your browser does not support the video tag."
+                                    class: "rounded-lg shadow-md bg-black",
+                                    crossorigin: "anonymous",
+                                    source { 
+                                        src: result.video_url.clone(), 
+                                        r#type: "video/mp4" 
+                                    }
+                                    "Your browser does not support the video tag. Please use the download button below."
                                 }
 
-                                // Download Button
-                                a {
-                                    href: result.video_url.clone(),
-                                    download: "generated_video.mp4",
-                                    class: "inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors",
-                                    "Download Video"
+                                p { 
+                                    class: "text-xs text-gray-500 italic",
+                                    "Note: If video doesn't play due to CORS/403, use the download button or open URL directly."
+                                }
+
+                                // Download Button  
+                                div { class: "flex gap-2",
+                                    a {
+                                        href: result.video_url.clone(),
+                                        target: "_blank",
+                                        class: "inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors",
+                                        "Open Video"
+                                    }
+                                    button {
+                                        onclick: move |_| {
+                                            // Copy URL to clipboard
+                                            let url = result.video_url.clone();
+                                            let _ = eval(&format!("navigator.clipboard.writeText('{}')", url));
+                                        },
+                                        class: "inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors",
+                                        "Copy URL"
+                                    }
                                 }
                             }
                         }
