@@ -36,6 +36,7 @@ fn main() {
 fn App() -> Element {
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
+        document::Title { "iDoris | Your Local AI Assistant" }
         // Use Tailwind CDN for complete class support
         script { src: "https://cdn.tailwindcss.com" }
         body {

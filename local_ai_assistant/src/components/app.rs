@@ -161,7 +161,7 @@ pub fn App() -> Element {
                             ActivePanel::ImageGen => rsx! { "Image Generation" },
                             ActivePanel::Tts => rsx! { "Text to Speech" },
                             ActivePanel::ContentEditor => rsx! { "Content Editor" },
-                            ActivePanel::VideoGen => rsx! { "视频生成" },
+                            ActivePanel::VideoGen => rsx! { "Video Generation" },
                         }
                     }
 
