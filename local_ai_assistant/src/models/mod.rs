@@ -7,6 +7,7 @@ mod settings;
 mod model_info;
 pub mod content_template;
 pub mod video_gen;
+pub mod blog_post;
 
 pub use chat::{ChatMessage, ChatRole};
 pub use session::Session;
@@ -21,3 +22,4 @@ pub use model_info::{ModelInfo, ModelStatus, ModelType, CacheInfo, get_available
 pub use video_gen::{
     VideoProvider, VideoModel, VideoConfig, VideoQuality,
 };
+pub use blog_post::{BlogPost, BlogSection, HeadingLevel};

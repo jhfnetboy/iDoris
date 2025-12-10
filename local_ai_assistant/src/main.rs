@@ -12,6 +12,9 @@ mod models;
 mod core;
 
 #[cfg(feature = "server")]
+mod content;
+
+#[cfg(feature = "server")]
 mod storage;
 
 mod server_functions;
