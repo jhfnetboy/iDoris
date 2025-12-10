@@ -11,10 +11,11 @@ dioxus = { version = "0.7.2", features = ["fullstack"] }
 kalosm = { git = "https://github.com/floneum/floneum", features = ["language", "surrealdb"], optional = true }
 image = { version = "0.25", optional = true }
 base64 = { version = "0.22", optional = true }
-tokio = "1.45.1"
+tokio = { version = "1.45.1", features = ["sync"] }
+serde_json = "1.0"
 web-sys = { version = "0.3.77", features = ["console"] }
 gloo-net = { version = "0.6", features = ["http"] }
-gloo-timers = "0.3"
+gloo-timers = { version = "0.3", features = ["futures"] }
 js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2.100"
@@ -40,12 +41,16 @@ feed-rs = { version = "2.1", optional = true }
 reqwest = { version = "0.12", features = ["json"], optional = true }
 readability = { version = "0.3", optional = true }
 
+# Phase 2.5 Video Generation
+lazy_static = { version = "1.5", optional = true }
+tokio-util = { version = "0.7", optional = true }
+
 [features]
 default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability"]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability", "dep:lazy_static", "dep:tokio-util"]
 
 [profile.wasm-dev]
 inherits = "dev"

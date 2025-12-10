@@ -175,15 +175,29 @@ pub fn Sidebar(
                     span { "Content Editor" }
                 }
 
-                // Future panels (commented out for now)
-                // Video Gen
-                // button {
-                //     class: "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors opacity-50 cursor-not-allowed mb-2",
-                //     disabled: true,
-                //     svg { ... }
-                //     span { "Video Gen" }
-                //     span { class: "text-xs text-slate-500 ml-auto", "Soon" }
-                // }
+                // Video Gen panel button
+                button {
+                    class: if matches!(active_panel(), ActivePanel::VideoGen) {
+                        "w-full py-2 px-3 bg-purple-600 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    } else {
+                        "w-full py-2 px-3 hover:bg-slate-700 rounded-lg flex items-center gap-3 transition-colors mb-2"
+                    },
+                    onclick: move |_| on_select_panel.call(ActivePanel::VideoGen),
+                    svg {
+                        class: "w-5 h-5 text-slate-400",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        view_box: "0 0 24 24",
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        }
+                    }
+                    span { "Video Generation" }
+                    span { class: "text-xs text-purple-400 ml-auto", "AI" }
+                }
             }
 
             // Footer with settings button

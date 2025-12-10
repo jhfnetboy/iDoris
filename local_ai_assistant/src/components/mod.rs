@@ -9,6 +9,7 @@ mod settings_page;
 mod image_gen;
 mod tts_panel;
 mod content_editor;
+mod video_gen;
 
 pub use app::{App, ActivePanel};
 pub use sidebar::Sidebar;
@@ -19,3 +20,4 @@ pub use settings_page::SettingsPage;
 pub use image_gen::ImageGenPanel;
 pub use tts_panel::TtsPanel;
 pub use content_editor::ContentEditorPanel;
+pub use video_gen::VideoGenPanel;

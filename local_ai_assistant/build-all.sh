@@ -1,1 +1,1 @@
-dx serve --platform web --release
+cargo check && dx serve --platform web --release

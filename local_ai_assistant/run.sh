@@ -29,16 +29,27 @@ print_error() {
 
 # Kill existing processes
 kill_existing() {
-    print_status "Killing existing $APP_NAME processes..."
+    print_status "Killing existing Rust processes..."
+    # Kill all Rust-related processes
+    ps aux | grep -E "(dx serve|$APP_NAME|rustc)" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null || true
     pkill -f "$APP_NAME" 2>/dev/null || true
-    
+    pkill -f "dx serve" 2>/dev/null || true
+
     print_status "Checking for process on port $PORT..."
     lsof -ti:$PORT | xargs kill -9 2>/dev/null || true
     sleep 1
 }
 
+# Clean build artifacts
+clean_build() {
+    print_status "Cleaning build artifacts..."
+    rm -rf target/ 2>/dev/null || true
+    print_status "Clean completed!"
+}
+
 # Build the project
 build() {
+    clean_build
     print_status "Building $APP_NAME in release mode..."
     dx build --platform web --release
     print_status "Build completed!"
@@ -81,9 +92,10 @@ usage() {
     echo "Usage: ./run.sh [command]"
     echo ""
     echo "Commands:"
-    echo "  build    Build the project in release mode"
+    echo "  build    Clean and build the project in release mode"
     echo "  run      Run the built server (default)"
     echo "  dev      Start development server with hot reload"
+    echo "  clean    Clean build artifacts"
     echo "  kill     Kill all running instances"
     echo "  help     Show this help message"
     echo ""
@@ -106,6 +118,9 @@ case "${1:-run}" in
         ;;
     dev)
         dev_server
+        ;;
+    clean)
+        clean_build
         ;;
     kill)
         kill_existing
