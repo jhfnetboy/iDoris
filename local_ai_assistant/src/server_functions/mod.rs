@@ -9,6 +9,7 @@ pub mod server_image_gen;
 mod tts;
 mod content;
 mod server_video_gen;
+pub mod server_model_manager;
 
 pub use chat::*;
 pub use session::*;
@@ -17,3 +18,4 @@ pub use server_image_gen::*;
 pub use tts::*;
 pub use content::*;
 pub use server_video_gen::*;
+pub use server_model_manager::*;

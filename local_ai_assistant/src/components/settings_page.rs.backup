@@ -1,13 +1,13 @@
 //! Settings Page Component - Full-page settings view
 
 use dioxus::prelude::*;
-use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize, ModelInfo, ModelType};
+use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize};
 use crate::server_functions::{
     list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile,
     is_image_model_ready, init_image_model, get_image_gen_status,
     list_cached_models, download_model, ensure_model_cached, init_hf_cache,
 };
-
+use crate::core::model_manager::{ModelInfo, ModelType};
 
 // Helper function to format size
 fn format_size(size_mb: u64) -> String {
@@ -210,8 +210,8 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
 
     // Load LLM models on mount
     {
-        let mut models = models.clone();
-        let mut llm_status = llm_status.clone();
+        let models = models.clone();
+        let llm_status = llm_status.clone();
         use_effect(move || {
             spawn(async move {
                 llm_status.set("Loading models...".to_string());
@@ -291,7 +291,7 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                     // Show available LLM models
                     {
                         let current_models = models();
-                    current_models.iter().map(|model| {
+                    for model in current_models.iter() {
                         let model_id = model.id.clone();
                         let model_name = model.name.clone();
                         let model_cached = model.is_cached;
@@ -327,11 +327,9 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                                     button {
                                         class: "px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded",
                                                 onclick: move |_| {
-                                            let mut models = models.clone();
-                                            let mut llm_downloading = llm_downloading.clone();
-                                            let mut llm_status = llm_status.clone();
-                                            let model_id = model_id.clone();
-                                            let model_name = model_name.clone();
+                                            let models = models.clone();
+                                            let llm_downloading = llm_downloading.clone();
+                                            let llm_status = llm_status.clone();
 
                                             spawn(async move {
                                                 llm_downloading.set(true);
@@ -370,9 +368,6 @@ fn ModelsSettings(settings: Signal<AppSettings>) -> Element {
                                         }
                             }
                         }
-                        }
-                        }
-                    }).collect::<Vec<_>>().into_iter()
                     }
 
                     // Show download status

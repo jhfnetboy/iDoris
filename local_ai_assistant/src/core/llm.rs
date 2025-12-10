@@ -15,6 +15,9 @@ use kalosm::language::{Chat, ChatModelExt, IntoChatMessage, Llama};
 use once_cell::sync::{Lazy, OnceCell};
 use futures::channel::mpsc;
 
+#[cfg(feature = "server")]
+use super::model_manager::ModelManager;
+
 /// Global storage for the Llama model
 static LLAMA_MODEL: Lazy<Mutex<Option<Llama>>> = Lazy::new(|| Mutex::new(None));
 
@@ -61,8 +64,18 @@ async fn load_model(model_id: &str) -> Result<(), String> {
 
     println!("Initializing chat model: {}...", model_id);
 
+    // Convert model_id to HuggingFace format if needed
+    let hf_model_id = convert_to_hf_model_id(model_id);
+
+    #[cfg(feature = "server")]
+    {
+        // Pre-download model using hf if not cached
+        if let Err(e) = ModelManager::ensure_model_cached(&hf_model_id).await {
+            eprintln!("Warning: Failed to ensure model is cached: {}", e);
+        }
+    }
+
     let source = get_model_source(model_id)?;
-    println!("Downloading model {}...", model_id);
 
     let llama = Llama::builder()
         .with_source(source)
@@ -310,4 +323,15 @@ pub fn is_initialized() -> bool {
 /// Check if the model is initialized (async version)
 pub async fn is_initialized_async() -> bool {
     is_initialized()
+}
+
+/// Convert model ID to HuggingFace format
+fn convert_to_hf_model_id(model_id: &str) -> String {
+    match model_id {
+        "qwen-2.5-1.5b" => "Qwen/Qwen2.5-1.5B-Instruct".to_string(),
+        "qwen-2.5-3b" => "Qwen/Qwen2.5-3B-Instruct".to_string(),
+        "qwen-2.5-7b" => "Qwen/Qwen2.5-7B-Instruct".to_string(),
+        "llama-3.2-3b" => "meta-llama/Llama-3.2-3B-Instruct".to_string(),
+        _ => model_id.to_string(),
+    }
 }

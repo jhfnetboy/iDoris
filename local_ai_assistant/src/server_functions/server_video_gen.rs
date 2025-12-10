@@ -29,21 +29,21 @@ pub struct VideoGenForm {
 impl Default for VideoGenForm {
     fn default() -> Self {
         Self {
-            prompt: "".to_string(),
+            prompt: "a lovely white cat is playing in the garden".to_string(),
             negative_prompt: None,
             duration_seconds: 5,
             width: 1024,
             height: 576,
             quality: VideoQuality::HD,
             fps: 24,
-            provider: VideoProvider::ByteDance, // 默认使用即梦（性价比高）
+            provider: VideoProvider::ByteDance, // Default to ByteDance (Cost-effective)
             model: VideoModel::JimengV2,
             seed: None,
         }
     }
 }
 
-// 创建一个简化的 VideoResponse 结构体用于 web 模式
+// Create a simplified VideoResponse struct for web mode
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VideoResponse {
     pub video_url: String,
@@ -54,7 +54,7 @@ pub struct VideoResponse {
     pub status: String,
 }
 
-// Provider信息结构
+// Provider Info Structure
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VideoProviderInfo {
     pub provider: VideoProvider,
@@ -63,7 +63,7 @@ pub struct VideoProviderInfo {
     pub description: String,
 }
 
-// Provider配置状态
+// Provider Config Status
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProviderConfigStatus {
     pub provider: VideoProvider,
@@ -72,7 +72,7 @@ pub struct ProviderConfigStatus {
     pub env_key: String,
 }
 
-// 任务状态
+// Task Status
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VideoTaskStatus {
     pub task_id: String,
@@ -82,21 +82,22 @@ pub struct VideoTaskStatus {
     pub error: Option<String>,
 }
 
-// 仅在 server 特性下启用实际的视频生成功能
+// Enable actual video generation only under
 #[cfg(feature = "server")]
-mod video_gen_impl {
-    use super::*;
-    use lazy_static::lazy_static;
+use lazy_static::lazy_static;
 
-    lazy_static::lazy_static! {
-        static ref VIDEO_GENERATOR: Arc<Mutex<VideoGenerator>> = Arc::new(Mutex::new(VideoGenerator::new()));
-    }
+#[cfg(feature = "server")]
+lazy_static::lazy_static! {
+    static ref VIDEO_GENERATOR: Arc<Mutex<VideoGenerator>> = Arc::new(Mutex::new(VideoGenerator::new()));
+}
 
-    #[server]
-    pub async fn generate_video(form: VideoGenForm) -> Result<VideoResponse, ServerFnError> {
+#[server]
+pub async fn generate_video(form: VideoGenForm) -> Result<VideoResponse, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
         let generator = VIDEO_GENERATOR.lock().await;
 
-        // 构建请求
+        // Build request
         let request = VideoRequest::new(form.prompt)
             .with_model(form.model)
             .with_provider(form.provider)
@@ -109,7 +110,7 @@ mod video_gen_impl {
                 style: None,
             });
 
-        // 设置负面提示词和种子
+        // Set negative prompt and seed
         let mut request = request;
         if let Some(negative) = form.negative_prompt {
             request.negative_prompt = Some(negative);
@@ -118,12 +119,12 @@ mod video_gen_impl {
             request.seed = Some(seed);
         }
 
-        // 生成视频
+        // Generate video
         let response = generator.generate_video(request)
             .await
-            .map_err(|e| ServerFnError::new(format!("视频生成失败: {}", e)))?;
+            .map_err(|e| ServerFnError::new(format!("Video generation failed: {}", e)))?;
 
-        // 转换为简化的响应格式
+        // Convert to simplified response format
         Ok(VideoResponse {
             video_url: response.video_url,
             thumbnail_url: response.thumbnail_url,
@@ -138,9 +139,16 @@ mod video_gen_impl {
             },
         })
     }
+    #[cfg(not(feature = "server"))]
+    {
+        Err(ServerFnError::new("Video generation is only available in server mode."))
+    }
+}
 
-    #[server]
-    pub async fn estimate_video_cost(form: VideoGenForm) -> Result<f64, ServerFnError> {
+#[server]
+pub async fn estimate_video_cost(form: VideoGenForm) -> Result<f64, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
         let generator = VIDEO_GENERATOR.lock().await;
 
         let request = VideoRequest::new(form.prompt)
@@ -158,62 +166,49 @@ mod video_gen_impl {
         let cost = generator.estimate_cost(&request);
         Ok(cost)
     }
+    #[cfg(not(feature = "server"))]
+    {
+         // Provide a basic cost estimate (based on model type) for client-side fallback (if needed)
+         // But usually this function is called from client to server.
+         // If called on client accidentally without server, return 0 or error.
+         // Actually, let's keep the client-side estimation logic if it was intended to run locally?
+         // No, #[server] means it's an API call. If we want client-side logic, it should be a normal function, not #[server].
+         // The previous code had a client-side impl for `estimate_video_cost` marked as `#[server]`.
+         // This implies it was mocking the server call?
+         // If I keep it #[server], the body on client is the network call.
+         // The body on server is the implementation.
+         // SO: The logic I am writing here IS the server implementation.
+         // The macro generates the client stub automatically.
+         // I don't need a `cfg(not(server))` block unless I want to override what happens on the server when the feature is disabled.
+         
+       Err(ServerFnError::new("Server feature disabled"))
+    }
 }
 
-// 为 web 模式提供空的实现
-#[cfg(not(feature = "server"))]
+// Common server functions (do not need core module)
 #[server]
-pub async fn generate_video(form: VideoGenForm) -> Result<VideoResponse, ServerFnError> {
-    Err(ServerFnError::new("视频生成功能仅在服务器模式下可用。请使用 `dx serve --features server` 启动服务器模式。".to_string()))
-}
-
-#[cfg(not(feature = "server"))]
-#[server]
-pub async fn estimate_video_cost(form: VideoGenForm) -> Result<f64, ServerFnError> {
-    // 提供一个基本的成本估算（基于模型类型）
-    let base_cost = match form.model {
-        VideoModel::JimengV2 => 0.010 * form.duration_seconds as f64,
-        VideoModel::JimengV1 => 0.007 * form.duration_seconds as f64,
-        VideoModel::Pika2 => 0.03 * form.duration_seconds as f64,
-        _ => 0.02 * form.duration_seconds as f64,
-    };
-
-    // 根据质量调整成本
-    let quality_multiplier = match form.quality {
-        VideoQuality::Standard => 0.67,
-        VideoQuality::HD => 1.0,
-        VideoQuality::Premium => 1.5,
-    };
-
-    Ok(base_cost * quality_multiplier)
-}
-
-// 重新导出生成函数
-#[cfg(feature = "server")]
-pub use video_gen_impl::{generate_video, estimate_video_cost};
-
-// 通用的服务器函数（不需要 core 模块）
+// Common server functions (do not need core module)
 #[server]
 pub async fn get_available_video_providers() -> Result<Vec<VideoProviderInfo>, ServerFnError> {
-    let providers = vec![
+    let mut providers = vec![
         VideoProviderInfo {
             provider: VideoProvider::ByteDance,
-            name: "字节跳动".to_string(),
+            name: "ByteDance".to_string(),
             models: vec![
-                ("即梦V2".to_string(), VideoModel::JimengV2),
-                ("即梦V1".to_string(), VideoModel::JimengV1),
-                ("豆包视频".to_string(), VideoModel::DoubaoVideo),
+                ("Jimeng V2".to_string(), VideoModel::JimengV2),
+                ("Jimeng V1".to_string(), VideoModel::JimengV1),
+                ("Doubao Video".to_string(), VideoModel::DoubaoVideo),
             ],
-            description: "性价比最高的选择，特别适合中文内容".to_string(),
+            description: "Best value, excellent for Chinese content".to_string(),
         },
         VideoProviderInfo {
             provider: VideoProvider::Alibaba,
-            name: "阿里巴巴".to_string(),
+            name: "Alibaba".to_string(),
             models: vec![
-                ("通义万象".to_string(), VideoModel::TongyiWanxiang),
-                ("阿里VGen".to_string(), VideoModel::AliVGen),
+                ("Tongyi Wanxiang".to_string(), VideoModel::TongyiWanxiang),
+                ("Ali VGen".to_string(), VideoModel::AliVGen),
             ],
-            description: "稳定可靠，企业级服务".to_string(),
+            description: "Stable and reliable enterprise service".to_string(),
         },
         VideoProviderInfo {
             provider: VideoProvider::OpenRouter,
@@ -223,18 +218,50 @@ pub async fn get_available_video_providers() -> Result<Vec<VideoProviderInfo>, S
                 ("Stable Video".to_string(), VideoModel::StableVideoDiffusion),
                 ("Gen-2".to_string(), VideoModel::Gen2),
             ],
-            description: "国际主流模型，英文效果更好".to_string(),
+            description: "International models, better for English".to_string(),
         },
         VideoProviderInfo {
             provider: VideoProvider::Baidu,
-            name: "百度".to_string(),
+            name: "Baidu".to_string(),
             models: vec![
-                ("文心视频".to_string(), VideoModel::ErnieVideo),
-                ("飞桨视频".to_string(), VideoModel::PaddlePaddleVideo),
+                ("Ernie Video".to_string(), VideoModel::ErnieVideo),
+                ("Paddle Video".to_string(), VideoModel::PaddlePaddleVideo),
             ],
-            description: "国内老牌AI厂商，技术成熟".to_string(),
+            description: "Mature technology from a leading AI company".to_string(),
         },
     ];
+
+    #[cfg(feature = "server")]
+    {
+        // Add Local Models
+        // We reuse the model manager to list downloaded models
+        let local_models = crate::models::get_available_models();
+        {
+             let mut local_video_models = Vec::new();
+             
+             for model in local_models {
+                 // Basic heuristic to identify likely video models
+                 let id_lower = model.id.to_lowercase();
+                 if id_lower.contains("video") 
+                    || id_lower.contains("motion") 
+                    || id_lower.contains("animate") 
+                    || id_lower.contains("svd") 
+                    || id_lower.contains("zeroscope")
+                 {
+                     local_video_models.push((model.id, VideoModel::LocalVideo));
+                 }
+             }
+
+             if !local_video_models.is_empty() {
+                 providers.push(VideoProviderInfo {
+                     provider: VideoProvider::Local,
+                     name: "Local Machine".to_string(),
+                     models: local_video_models,
+                     description: "Run on your own hardware (Requires capable GPU)".to_string(),
+                 });
+             }
+        }
+    }
 
     Ok(providers)
 }

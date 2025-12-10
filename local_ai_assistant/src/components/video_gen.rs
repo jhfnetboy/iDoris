@@ -49,7 +49,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
         });
     };
 
-    // 生成视频
+    // Generate    // Generate video
     let handle_generate = move |_| {
         if is_generating() {
             return;
@@ -57,7 +57,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
 
         let current_form = form.read().clone();
         if current_form.prompt.is_empty() {
-            error_msg.set(Some("请输入视频描述".to_string()));
+            error_msg.set(Some("Please enter a video description".to_string()));
             return;
         }
 
@@ -73,38 +73,43 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                 }
                 Err(e) => {
                     is_generating.set(false);
-                    error_msg.set(Some(format!("视频生成失败: {}", e)));
+                    error_msg.set(Some(format!("Video generation failed: {}", e)));
                 }
             }
         });
     };
 
     rsx! {
-        div { class: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50",
-            div { class: "bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto",
+        // Changed from fixed overlay to full-height flex container for sidebar usage
+        div { class: "h-full flex flex-col bg-white text-gray-900 overflow-y-auto",
+            div { class: "p-6 w-full max-w-4xl mx-auto",
                 // Header
                 div { class: "flex justify-between items-center mb-6",
-                    h2 { class: "text-2xl font-bold text-gray-800", "视频生成" }
-                    button {
-                        onclick: move |_| props.on_close.call(()),
-                        class: "text-gray-500 hover:text-gray-700 text-2xl",
-                        "×"
-                    }
+                    h2 { class: "text-2xl font-bold text-gray-800", "Video Generation" }
+                    // Sidebar close button usually handled by parent calling props.on_close, 
+                    // but we keep a close button if the user wants to explicitly close this panel.
+                    // Or if it's a main panel, maybe we don't need a close button? 
+                    // The user said "use right side page panel(like other menu click)", 
+                    // implying it's a main view. Navigation handles switching.
+                    // We'll keep it optional or remove if it feels redundant with the sidebar navigation.
+                    // Let's keep it for now but maybe style it differently or remove if redundant.
+                    // Actually, if it's a "page panel", standard design often doesn't have a close 'x'.
+                    // But to be safe and allow closing back to chat:
                 }
 
-                // 错误提示
+                // Error Message
                 if let Some(error) = error_msg() {
                     div { class: "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4",
                         {error}
                     }
                 }
 
-                // 主表单
-                div { class: "grid grid-cols-1 lg:grid-cols-2 gap-6",
-                    // 左侧：基本设置
+                // Main Form
+                div { class: "grid grid-cols-1 gap-6", // Single column for sidebar width constraints usually, but 4xl allows 2 cols
+                    // Basic Settings
                     div { class: "space-y-4",
                         div {
-                            label { class: "block text-sm font-medium text-gray-700 mb-1", "视频描述" }
+                            label { class: "block text-sm font-medium text-gray-700 mb-1", "Prompt" }
                             textarea {
                                 value: form.read().prompt.clone(),
                                 oninput: move |e| {
@@ -112,36 +117,37 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     f.prompt = e.value();
                                     estimate_cost(());
                                 },
-                                placeholder: "描述你想要生成的视频内容，例如：一只可爱的小猫在花园里玩耍",
+                                // Updated placeholder to match requested default
+                                placeholder: "Describe the video you want to generate, e.g., a lovely white cat is playing in the garden",
                                 class: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
                                 rows: 3
                             }
                         }
 
                         div {
-                            label { class: "block text-sm font-medium text-gray-700 mb-1", "负面描述 (可选)" }
+                            label { class: "block text-sm font-medium text-gray-700 mb-1", "Negative Prompt (Optional)" }
                             textarea {
                                 value: form.read().negative_prompt.clone().unwrap_or_default(),
                                 oninput: move |e| {
                                     form.write().negative_prompt = if e.value().is_empty() { None } else { Some(e.value()) };
                                 },
-                                placeholder: "不希望出现在视频中的内容",
+                                placeholder: "Content you don't want in the video",
                                 class: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
                                 rows: 2
                             }
                         }
 
-                        // 服务商和模型选择
-                        div { class: "grid grid-cols-2 gap-4",
+                        // Provider and Model Selection
+                        div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
                             div {
-                                label { class: "block text-sm font-medium text-gray-700 mb-1", "服务商" }
+                                label { class: "block text-sm font-medium text-gray-700 mb-1", "Provider" }
                                 select {
                                     value: format!("{:?}", form.read().provider),
                                     onchange: move |e| {
                                         if let Ok(provider) = serde_json::from_str::<VideoProvider>(&format!("\"{}\"", e.value())) {
                                             let provider_clone = provider.clone();
                                             form.write().provider = provider;
-                                            // 更新默认模型
+                                            // Update default model
                                             let providers = providers.read();
                                             if let Some(p) = providers.iter().find(|p| p.provider == provider_clone) {
                                                 if let Some((_, model)) = p.models.first() {
@@ -158,7 +164,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                             }
 
                             div {
-                                label { class: "block text-sm font-medium text-gray-700 mb-1", "模型" }
+                                label { class: "block text-sm font-medium text-gray-700 mb-1", "Model" }
                                 select {
                                     value: format!("{:?}", form.read().model),
                                     onchange: move |e| {
@@ -168,7 +174,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                         }
                                     },
                                     class: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                                    // 显示当前服务商的可用模型
+                                    // Show available models for current provider
                                     for provider in providers.read().iter() {
                                         if provider.provider == form.read().provider {
                                             for (name, model) in provider.models.iter() {
@@ -181,7 +187,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                         }
                     }
 
-                    // 右侧：高级设置
+                    // Advanced Settings
                     div { class: "space-y-4",
                         button {
                             onclick: move |_| {
@@ -190,18 +196,18 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                         },
                             class: "text-blue-600 hover:text-blue-800 text-sm font-medium",
                             if *show_advanced.read() {
-                                "隐藏高级设置"
+                                "Hide Advanced Settings"
                             } else {
-                                "显示高级设置"
+                                "Show Advanced Settings"
                             }
                         }
 
                         if *show_advanced.read() {
                             div { class: "space-y-4 border-t pt-4",
-                                // 尺寸设置
+                                // Dimensions
                                 div { class: "grid grid-cols-2 gap-4",
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "宽度" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Width" }
                                         input {
                                             r#type: "number",
                                             value: form.read().width.to_string(),
@@ -219,7 +225,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     }
 
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "高度" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Height" }
                                         input {
                                             r#type: "number",
                                             value: form.read().height.to_string(),
@@ -237,10 +243,10 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     }
                                 }
 
-                                // 时长和质量
+                                // Duration and Quality
                                 div { class: "grid grid-cols-2 gap-4",
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "时长 (秒)" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Duration (s)" }
                                         input {
                                             r#type: "number",
                                             value: form.read().duration_seconds.to_string(),
@@ -257,7 +263,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     }
 
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "质量" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Quality" }
                                         select {
                                             value: format!("{:?}", form.read().quality),
                                             onchange: move |e| {
@@ -267,17 +273,17 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                                 }
                                             },
                                             class: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
-                                            option { value: "Standard", "标准 (480p)" }
-                                            option { value: "HD", "高清 (720p)" }
-                                            option { value: "Premium", "超清 (1080p+)" }
+                                            option { value: "Standard", "Standard (480p)" }
+                                            option { value: "HD", "HD (720p)" }
+                                            option { value: "Premium", "Premium (1080p+)" }
                                         }
                                     }
                                 }
 
-                                // 帧率和种子
+                                // FPS and Seed
                                 div { class: "grid grid-cols-2 gap-4",
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "帧率 (FPS)" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "FPS" }
                                         input {
                                             r#type: "number",
                                             value: form.read().fps.to_string(),
@@ -293,7 +299,7 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     }
 
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "随机种子 (可选)" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Seed (Optional)" }
                                         input {
                                             r#type: "number",
                                             value: form.read().seed.map(|s| s.to_string()).unwrap_or_default(),
@@ -309,56 +315,56 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                             }
                         }
 
-                        // 成本估算
+                        // Cost Estimation
                         div { class: "bg-blue-50 border border-blue-200 rounded-lg p-4",
                             div { class: "flex justify-between items-center",
-                                span { class: "text-sm font-medium text-gray-700", "预估成本" }
-                                span { class: "text-lg font-bold text-blue-600", "预估中..." }
+                                span { class: "text-sm font-medium text-gray-700", "Estimated Cost" }
+                                span { class: "text-lg font-bold text-blue-600", "Calculating..." }
                             }
-                            p { class: "text-xs text-gray-600 mt-1", "基于参数计算成本" }
+                            p { class: "text-xs text-gray-600 mt-1", "Based on current settings" }
                         }
                     }
                 }
 
-                // 生成按钮
+                // Generate Button
                 div { class: "mt-6 flex justify-center",
                     button {
                         onclick: handle_generate,
                         disabled: is_generating(),
                         class: "px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium",
                         if is_generating() {
-                            "生成中..."
+                            "Generating..."
                         } else {
-                            "生成视频"
+                            "Generate Video"
                         }
                     }
                 }
 
-                // 生成结果
+                // Results
                 if let Some(result) = generation_result.read().clone() {
                     div { class: "mt-6 border-t pt-6",
-                        h3 { class: "text-lg font-semibold mb-4", "生成结果" }
+                        h3 { class: "text-lg font-semibold mb-4", "Result" }
                         div { class: "bg-gray-50 rounded-lg p-4",
                             div { class: "grid grid-cols-1 md:grid-cols-2 gap-4 mb-4",
                                 div {
-                                    span { class: "text-sm text-gray-600", "时长: " }
-                                    span { class: "font-medium", "已完成" }
+                                    span { class: "text-sm text-gray-600", "Duration: " }
+                                    span { class: "font-medium", "Finished" }
                                 }
                                 div {
-                                    span { class: "text-sm text-gray-600", "实际成本: " }
-                                    span { class: "font-medium", "已计算" }
+                                    span { class: "text-sm text-gray-600", "Actual Cost: " }
+                                    span { class: "font-medium", "Calculated" }
                                 }
                                 div {
-                                    span { class: "text-sm text-gray-600", "状态: " }
-                                    span { class: "font-medium text-green-600", "已完成" }
+                                    span { class: "text-sm text-gray-600", "Status: " }
+                                    span { class: "font-medium text-green-600", "Completed" }
                                 }
                                 div {
-                                    span { class: "text-sm text-gray-600", "任务ID: " }
-                                    span { class: "font-mono text-xs", "任务ID" }
+                                    span { class: "text-sm text-gray-600", "Task ID: " }
+                                    span { class: "font-mono text-xs", "Task ID" }
                                 }
                             }
 
-                            // 视频预览
+                            // Video Preview
                             div { class: "space-y-2",
                                 video {
                                     controls: true,
@@ -366,15 +372,15 @@ pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
                                     max_width: "640",
                                     class: "rounded-lg shadow-md",
                                     source { src: result.video_url.clone(), r#type: "video/mp4" }
-                                    "您的浏览器不支持视频播放"
+                                    "Your browser does not support the video tag."
                                 }
 
-                                // 下载按钮
+                                // Download Button
                                 a {
                                     href: result.video_url.clone(),
                                     download: "generated_video.mp4",
                                     class: "inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors",
-                                    "下载视频"
+                                    "Download Video"
                                 }
                             }
                         }

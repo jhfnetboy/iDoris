@@ -1,0 +1,395 @@
+warning: unused manifest key: build
+warning: unused manifest key: target.x86_64-apple-darwin.rustflags
+    Checking local_ai_assistant v0.1.0 (/Volumes/UltraDisk/Dev2/crypto-projects/iDoris/local_ai_assistant)
+warning: unused import: `ChatRole`
+ --> src/components/chat.rs:7:34
+  |
+7 | use crate::models::{ChatMessage, ChatRole, Session, AppSettings};
+  |                                  ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `ensure_model_cached`, `get_image_gen_status`, and `init_hf_cache`
+ --> src/components/settings_page.rs:7:45
+  |
+7 |     is_image_model_ready, init_image_model, get_image_gen_status,
+  |                                             ^^^^^^^^^^^^^^^^^^^^
+8 |     list_cached_models, download_model, ensure_model_cached, init_hf_cache,
+  |                                         ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `ImageGenStatus`
+ --> src/components/image_gen.rs:7:78
+  |
+7 |     generate_image, is_image_model_ready, get_image_gen_status, ImageResult, ImageGenStatus
+  |                                                                              ^^^^^^^^^^^^^^
+
+warning: unused import: `VideoConfig`
+ --> src/components/video_gen.rs:6:48
+  |
+6 | use crate::models::{VideoProvider, VideoModel, VideoConfig, VideoQuality};
+  |                                                ^^^^^^^^^^^
+
+warning: unused import: `settings::SettingsPanel`
+  --> src/components/mod.rs:19:9
+   |
+19 | pub use settings::SettingsPanel;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `document::Document`
+  --> src/models/mod.rs:13:9
+   |
+13 | pub use document::Document;
+   |         ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `get_available_models`
+  --> src/models/mod.rs:15:68
+   |
+15 | pub use model_info::{ModelInfo, ModelStatus, ModelType, CacheInfo, get_available_models};
+   |                                                                    ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ArticleTemplate`, `EditorContent`, `EditorSection`, `Platform`, `TemplateSection`, `WritingStyle`, and `get_builtin_templates`
+  --> src/models/mod.rs:17:5
+   |
+17 |     ArticleTemplate, EditorContent, EditorSection, Platform,
+   |     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^
+18 |     WritingStyle, TemplateSection, get_builtin_templates,
+   |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ModelStatus`
+ --> src/server_functions/chat.rs:8:32
+  |
+8 | use crate::models::{ModelInfo, ModelStatus};
+  |                                ^^^^^^^^^^^
+
+warning: unused import: `std::path::PathBuf`
+ --> src/server_functions/context.rs:7:5
+  |
+7 | use std::path::PathBuf;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `VideoConfig`
+ --> src/server_functions/server_video_gen.rs:8:48
+  |
+8 | use crate::models::{VideoProvider, VideoModel, VideoConfig, VideoQuality};
+  |                                                ^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:213:5
+    |
+213 |     mut models: Signal<Vec<ModelInfo>>,
+    |     ----^^^^^^
+    |     |
+    |     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:214:5
+    |
+214 |     mut cache_info: Signal<CacheInfo>,
+    |     ----^^^^^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:237:5
+    |
+237 |     mut models: Signal<Vec<ModelInfo>>,
+    |     ----^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:238:5
+    |
+238 |     mut cache_info: Signal<CacheInfo>,
+    |     ----^^^^^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/chat.rs:33:9
+   |
+33 |     let mut state = use_signal(|| ChatState {
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:667:21
+    |
+667 |                 Err(e) => {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_e`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: variable `chunk_count` is assigned to, but never used
+   --> src/components/chat.rs:693:25
+    |
+693 |                 let mut chunk_count = 0;
+    |                         ^^^^^^^^^^^
+    |
+    = note: consider using `_chunk_count` instead
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:713:29
+    |
+713 |                         Err(e) => {
+    |                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:723:17
+    |
+723 |             Err(e) => {
+    |                 ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `download_progress`
+   --> src/components/settings_page.rs:178:13
+    |
+178 |     let mut download_progress: Signal<u8> = use_signal(|| 0);
+    |             ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_download_progress`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:178:9
+    |
+178 |     let mut download_progress: Signal<u8> = use_signal(|| 0);
+    |         ----^^^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:182:9
+    |
+182 |     let mut models: Signal<Vec<ModelInfo>> = use_signal(|| Vec::new());
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:183:9
+    |
+183 |     let mut llm_downloading: Signal<bool> = use_signal(|| false);
+    |         ----^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:184:9
+    |
+184 |     let mut llm_status: Signal<String> = use_signal(|| "Checking models...".to_string());
+    |         ----^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:25:9
+   |
+25 |     let mut templates = use_signal(|| get_builtin_templates());
+   |         ----^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:47:9
+   |
+47 |     let mut handle_fetch_rss = move |_| {
+   |         ----^^^^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:72:9
+   |
+72 |     let mut handle_extract_article = move |_| {
+   |         ----^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/content_editor.rs:102:9
+    |
+102 |     let mut handle_generate_outline = move |_| {
+    |         ----^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:13:9
+   |
+13 |     let mut models = use_signal(Vec::<ModelInfo>::new);
+   |         ----^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:14:9
+   |
+14 |     let mut cache_info = use_signal(|| CacheInfo {
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:19:9
+   |
+19 |     let mut loading = use_signal(|| false);
+   |         ----^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: function `focus_input` is never used
+   --> src/components/chat.rs:783:4
+    |
+783 | fn focus_input() {}
+    |    ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: enum `SettingsTab` is never used
+  --> src/components/settings.rs:15:6
+   |
+15 | enum SettingsTab {
+   |      ^^^^^^^^^^^
+
+warning: function `render_language_option` is never used
+   --> src/components/settings.rs:837:4
+    |
+837 | fn render_language_option(mut settings: Signal<AppSettings>, lang: ResponseLanguage, label: &str, is_selected: bool) -> Element {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_theme_option` is never used
+   --> src/components/settings.rs:856:4
+    |
+856 | fn render_theme_option(mut settings: Signal<AppSettings>, theme: Theme, label: &str, is_selected: bool) -> Element {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `render_font_size_option` is never used
+   --> src/components/settings.rs:885:4
+    |
+885 | fn render_font_size_option(mut settings: Signal<AppSettings>, size: FontSize, is_selected: bool) -> Element {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `load_models` is never used
+   --> src/components/model_manager.rs:189:10
+    |
+189 | async fn load_models(
+    |          ^^^^^^^^^^^
+
+warning: function `download_model_action` is never used
+   --> src/components/model_manager.rs:211:10
+    |
+211 | async fn download_model_action(
+    |          ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `delete_model_action` is never used
+   --> src/components/model_manager.rs:235:10
+    |
+235 | async fn delete_model_action(
+    |          ^^^^^^^^^^^^^^^^^^^
+
+warning: function `format_size_mb` is never used
+   --> src/components/model_manager.rs:259:4
+    |
+259 | fn format_size_mb(size_mb: u64) -> String {
+    |    ^^^^^^^^^^^^^^
+
+warning: associated function `system` is never used
+  --> src/models/chat.rs:36:12
+   |
+17 | impl ChatMessage {
+   | ---------------- associated function in this implementation
+...
+36 |     pub fn system(session_id: Uuid, content: String) -> Self {
+   |            ^^^^^^
+
+warning: associated items `new` and `with_score` are never used
+  --> src/models/document.rs:34:12
+   |
+33 | impl Document {
+   | ------------- associated items in this implementation
+34 |     pub fn new(title: String, body: String) -> Self {
+   |            ^^^
+...
+42 |     pub fn with_score(mut self, score: f32) -> Self {
+   |            ^^^^^^^^^^
+
+warning: method `as_str` is never used
+  --> src/models/settings.rs:18:12
+   |
+17 | impl ResponseLanguage {
+   | --------------------- method in this implementation
+18 |     pub fn as_str(&self) -> &'static str {
+   |            ^^^^^^
+
+warning: methods `as_str` and `sidebar_bg` are never used
+  --> src/models/settings.rs:52:12
+   |
+51 | impl Theme {
+   | ---------- methods in this implementation
+52 |     pub fn as_str(&self) -> &'static str {
+   |            ^^^^^^
+...
+70 |     pub fn sidebar_bg(&self) -> &'static str {
+   |            ^^^^^^^^^^
+
+warning: methods `as_str` and `prose_class` are never used
+   --> src/models/settings.rs:98:12
+    |
+97  | impl FontSize {
+    | ------------- methods in this implementation
+98  |     pub fn as_str(&self) -> &'static str {
+    |            ^^^^^^
+...
+107 |     pub fn prose_class(&self) -> &'static str {
+    |            ^^^^^^^^^^^
+
+warning: associated function `new` is never used
+  --> src/models/model_info.rs:63:12
+   |
+62 | impl ModelInfo {
+   | -------------- associated function in this implementation
+63 |     pub fn new(id: &str, name: &str, size: &str, memory: &str, description: &str) -> Self {
+   |            ^^^
+
+warning: function `get_available_models` is never used
+  --> src/models/model_info.rs:89:8
+   |
+89 | pub fn get_available_models() -> Vec<ModelInfo> {
+   |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: method `display_name` is never used
+  --> src/models/content_template.rs:23:12
+   |
+22 | impl Platform {
+   | ------------- method in this implementation
+23 |     pub fn display_name(&self) -> &'static str {
+   |            ^^^^^^^^^^^^
+
+warning: methods `display_name` and `system_prompt` are never used
+  --> src/models/content_template.rs:61:12
+   |
+60 | impl WritingStyle {
+   | ----------------- methods in this implementation
+61 |     pub fn display_name(&self) -> &'static str {
+   |            ^^^^^^^^^^^^
+...
+72 |     pub fn system_prompt(&self) -> &'static str {
+   |            ^^^^^^^^^^^^^
+
+warning: method `with_content` is never used
+   --> src/models/content_template.rs:378:12
+    |
+367 | impl EditorSection {
+    | ------------------ method in this implementation
+...
+378 |     pub fn with_content(mut self, content: &str) -> Self {
+    |            ^^^^^^^^^^^^
+
+warning: function `parse_outline_response` is never used
+   --> src/server_functions/content.rs:203:4
+    |
+203 | fn parse_outline_response(response: &str) -> Vec<(String, String)> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `local_ai_assistant` (bin "local_ai_assistant") generated 52 warnings (run `cargo fix --bin "local_ai_assistant"` to apply 27 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.13s

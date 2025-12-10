@@ -7,6 +7,9 @@ pub mod embedding;
 pub mod vector_store;
 
 #[cfg(feature = "server")]
+pub mod model_manager;
+
+#[cfg(feature = "server")]
 pub mod image_gen;
 
 #[cfg(feature = "server")]

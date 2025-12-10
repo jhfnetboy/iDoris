@@ -10,6 +10,7 @@ mod image_gen;
 mod tts_panel;
 mod content_editor;
 mod video_gen;
+pub mod model_manager;
 
 pub use app::{App, ActivePanel};
 pub use sidebar::Sidebar;

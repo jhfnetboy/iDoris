@@ -2,7 +2,11 @@
 // Supports OpenRouter, Together.ai, and other providers
 
 use std::time::Duration;
+use std::collections::BTreeMap;
 use crate::models::{VideoProvider, VideoModel, VideoConfig, VideoQuality};
+use hmac::{Hmac, Mac};
+use sha2::{Sha256, Digest};
+use hex;
 
 // Video generation request
 #[derive(Debug, Clone)]
@@ -122,27 +126,30 @@ impl VideoModel {
             // Alibaba 通义万象
             (VideoModel::TongyiWanxiang, VideoQuality::Standard) => 0.008,  // ~0.06 RMB
             (VideoModel::TongyiWanxiang, VideoQuality::HD) => 0.014,        // ~0.10 RMB
-            (VideoModel::AliVGen, _) => 0.020,                            // ~0.14 RMB
+            (VideoModel::TongyiWanxiang, VideoQuality::Premium) => 0.021,   // ~0.15 RMB
+            
+            // Specific AliVGen cases must come before wildcard
+            (VideoModel::AliVGen, VideoQuality::Premium) => 0.030,          // ~0.21 RMB
+            (VideoModel::AliVGen, _) => 0.020,                              // ~0.14 RMB
 
             // Baidu 文心一言
             (VideoModel::ErnieVideo, VideoQuality::Standard) => 0.009,  // ~0.06 RMB
             (VideoModel::ErnieVideo, VideoQuality::HD) => 0.015,        // ~0.11 RMB
+            (VideoModel::ErnieVideo, VideoQuality::Premium) => 0.022,   // ~0.16 RMB
             (VideoModel::PaddlePaddleVideo, _) => 0.005,                // ~0.035 RMB
 
             // Tencent 混元
             (VideoModel::HunyuanVideo, VideoQuality::Standard) => 0.012, // ~0.08 RMB
             (VideoModel::HunyuanVideo, VideoQuality::HD) => 0.019,       // ~0.13 RMB
+            (VideoModel::HunyuanVideo, VideoQuality::Premium) => 0.025, // ~0.18 RMB
 
             // Default pricing for uncovered combinations
             (VideoModel::JimengV1, VideoQuality::Premium) => 0.028,    // ~0.20 RMB
             (VideoModel::JimengV2, VideoQuality::Premium) => 0.035,    // ~0.25 RMB
-            (VideoModel::TongyiWanxiang, VideoQuality::Premium) => 0.021, // ~0.15 RMB
-            (VideoModel::ErnieVideo, VideoQuality::Premium) => 0.022,   // ~0.16 RMB
-            (VideoModel::AliVGen, VideoQuality::Premium) => 0.030,      // ~0.21 RMB
-            (VideoModel::HunyuanVideo, VideoQuality::Premium) => 0.025, // ~0.18 RMB
+            
+            // Local video is free (running on hardware)
+            (VideoModel::LocalVideo, _) => 0.0,
 
-            // Default values
-            _ => 0.02, // Default to 2 cents per second
         }
     }
 }
@@ -185,9 +192,15 @@ impl VideoGenerator {
         // 国内厂商配置
         configs.insert(VideoProvider::ByteDance, ProviderConfig {
             api_key: std::env::var("BYTEDANCE_API_KEY").unwrap_or_default(),
-            access_key_id: std::env::var("Access_Key_ID").unwrap_or_default(),
-            secret_access_key: std::env::var("Secret_Access_Key").unwrap_or_default(),
-            base_url: "https://ark.cn-beijing.volces.com/api/v3".to_string(),
+            access_key_id: std::env::var("Access_Key_ID")
+                .or_else(|_| std::env::var("JIMENG_ACCESS_KEY"))
+                .or_else(|_| std::env::var("VOLC_ACCESS_KEY"))
+                .unwrap_or_default(),
+            secret_access_key: std::env::var("Secret_Access_Key")
+                .or_else(|_| std::env::var("JIMENG_SECRET_KEY"))
+                .or_else(|_| std::env::var("VOLC_SECRET_KEY"))
+                .unwrap_or_default(),
+            base_url: "https://ark.cn-beijing.volces.com/api/v3".to_string(), // Keep this but mostly unused for visual service
             timeout: Duration::from_secs(180),
         });
 
@@ -215,6 +228,25 @@ impl VideoGenerator {
             timeout: Duration::from_secs(300),
         });
 
+        // Local provider config (path based)
+        configs.insert(VideoProvider::Local, ProviderConfig {
+            api_key: String::new(),
+            access_key_id: String::new(),
+            secret_access_key: String::new(),
+            base_url: "local".to_string(),
+            timeout: Duration::from_secs(600),
+        });
+        
+        // HuggingFace provider
+         configs.insert(VideoProvider::HuggingFace, ProviderConfig {
+            api_key: std::env::var("HF_TOKEN").unwrap_or_default(),
+            access_key_id: String::new(),
+            secret_access_key: String::new(),
+            base_url: "https://api-inference.huggingface.co/models".to_string(),
+            timeout: Duration::from_secs(300),
+        });
+
+
         Self { configs }
     }
 
@@ -239,6 +271,7 @@ impl VideoGenerator {
             VideoProvider::Baidu => self.generate_with_baidu(request, cost_estimate).await,
             VideoProvider::Tencent => self.generate_with_tencent(request, cost_estimate).await,
             VideoProvider::HuggingFace => self.generate_with_huggingface(request, cost_estimate).await,
+            VideoProvider::Local => self.generate_with_local(request, cost_estimate).await,
         }
     }
 
@@ -297,34 +330,199 @@ impl VideoGenerator {
         })
     }
 
-    async fn generate_with_together(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    async fn generate_with_together(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Implementation for Together.ai
         todo!("Together.ai implementation pending")
     }
 
-    async fn generate_with_replicate(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    async fn generate_with_replicate(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Implementation for Replicate
         todo!("Replicate implementation pending")
     }
 
     async fn generate_with_bytedance(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+        println!("Starting generate_with_bytedance...");
         let config = self.configs.get(&VideoProvider::ByteDance)
             .ok_or_else(|| anyhow::anyhow!("ByteDance config not found"))?;
 
         if config.access_key_id.is_empty() || config.secret_access_key.is_empty() {
+            println!("Error: ByteDance keys missing");
             return Err(anyhow::anyhow!("ByteDance Access Key ID or Secret Access Key not configured. Please set Access_Key_ID and Secret_Access_Key in .env file."));
         }
 
-        // 暂时返回模拟响应，实际实现需要正确的VolcEngine签名
-        // 这是一个简化版本，后续可以完善
-        Ok(VideoResponse {
-            video_url: "https://sample-video-url.com/demo.mp4".to_string(),
-            thumbnail_url: Some("https://sample-thumbnail-url.com/demo.jpg".to_string()),
-            generation_id: format!("jimeng_{}", chrono::Utc::now().timestamp()),
-            duration_seconds: request.config.duration_seconds,
-            cost_estimate,
-            status: VideoStatus::Completed,
-        })
+        let client = reqwest::Client::new();
+        let region = "cn-north-1";
+        let service = "cv";
+        let host = "visual.volcengineapi.com";
+        let path = "/";
+        let version = "2022-08-31";
+
+        // 1. Submit Task
+        let action = "CVSync2AsyncSubmitTask";
+        // Ensure query params are sorted: Action comes before Version
+        let query = format!("Action={}&Version={}", action, version);
+        
+        let now = chrono::Utc::now();
+        let date_iso = now.format("%Y%m%dT%H%M%SZ").to_string();
+        
+        let seed = match request.seed {
+            Some(s) => s as i64,
+            None => -1,
+        };
+
+        // Construct Body
+        let req_body = serde_json::json!({
+            "req_key": "jimeng_t2v_v30_1080p", // Video 3.0
+            "prompt": request.prompt,
+            "seed": seed,
+            "frames": 121, // Default to 5s (24*5+1)
+            "aspect_ratio": "16:9" // Default
+        });
+        let payload = req_body.to_string();
+        println!("Request Payload: {}", payload);
+
+        // Debug: Print keys (masked)
+        println!("Using AccessKey: {}...", &config.access_key_id.chars().take(4).collect::<String>());
+
+        // Prepare headers for signature
+        // NOTE: We do NOT include X-Content-Sha256 in the headers map passed to signing, 
+        // to match the reference implementation which only signs [content-type, host, x-date].
+        let mut headers = BTreeMap::new();
+        headers.insert("Host".to_string(), host.to_string());
+        headers.insert("Content-Type".to_string(), "application/json".to_string());
+        headers.insert("X-Date".to_string(), date_iso.clone());
+        // headers.insert("X-Content-Sha256".to_string(), volc_sha256(&payload)); // Removed to match JS reference
+
+        let auth = sign_volc_request(
+            &config.access_key_id,
+            &config.secret_access_key,
+            "POST",
+            path,
+            &query,
+            &headers,
+            &payload, // Payload IS used for hash calculation inside the signer
+            region,
+            service,
+            &date_iso
+        );
+        println!("Generated Authorization: {}", auth);
+
+        let submit_resp = client.post(format!("https://{}?{}", host, query))
+            .header("Authorization", auth)
+            .header("Content-Type", "application/json")
+            .header("Host", host)
+            .header("X-Date", date_iso)
+            // .header("X-Content-Sha256", ...) // Not sending this header either
+            .body(payload)
+            .send()
+            .await?;
+
+        let status = submit_resp.status();
+        println!("Submit Response Status: {}", status);
+
+        if !status.is_success() {
+            let error_text = submit_resp.text().await?;
+            println!("Submit Response Error Body: {}", error_text);
+            return Err(anyhow::anyhow!("ByteDance Submit Task Error: status={}, body={}", status, error_text));
+        }
+
+        let submit_data: serde_json::Value = submit_resp.json().await?;
+        println!("Submit Response JSON: {:?}", submit_data);
+
+        if submit_data["code"].as_i64().unwrap_or(0) != 10000 {
+             return Err(anyhow::anyhow!("ByteDance Submit Failed: {}", submit_data["message"]));
+        }
+
+        let task_id = submit_data["data"]["task_id"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("Task ID not found in response"))?
+            .to_string();
+        println!("Task ID received: {}", task_id);
+
+        // 2. Poll Result
+        let action_poll = "CVSync2AsyncGetResult";
+        let query_poll = format!("Action={}&Version={}", action_poll, version);
+        
+        let mut attempts = 0;
+        let max_attempts = 150; 
+
+        loop {
+            if attempts >= max_attempts {
+                return Err(anyhow::anyhow!("Video generation timed out"));
+            }
+            attempts += 1;
+            tokio::time::sleep(Duration::from_secs(2)).await;
+
+            let now_poll = chrono::Utc::now();
+            let date_iso_poll = now_poll.format("%Y%m%dT%H%M%SZ").to_string();
+            
+            let poll_body = serde_json::json!({
+                "req_key": "jimeng_t2v_v30_1080p",
+                "task_id": task_id
+            });
+            let payload_poll = poll_body.to_string();
+
+            let mut headers_poll = BTreeMap::new();
+            headers_poll.insert("Host".to_string(), host.to_string());
+            headers_poll.insert("Content-Type".to_string(), "application/json".to_string());
+            headers_poll.insert("X-Date".to_string(), date_iso_poll.clone());
+
+            let auth_poll = sign_volc_request(
+                &config.access_key_id,
+                &config.secret_access_key,
+                "POST",
+                path,
+                &query_poll,
+                &headers_poll,
+                &payload_poll,
+                region,
+                service,
+                &date_iso_poll
+            );
+
+            let poll_resp = client.post(format!("https://{}?{}", host, query_poll))
+                .header("Authorization", auth_poll)
+                .header("Content-Type", "application/json")
+                .header("Host", host)
+                .header("X-Date", date_iso_poll)
+                .body(payload_poll)
+                .send()
+                .await;
+
+            match poll_resp {
+                Ok(resp) => {
+                    if !resp.status().is_success() {
+                        let err = resp.text().await.unwrap_or_default();
+                        println!("Poll Error ({}): {}", attempts, err);
+                        continue; 
+                    }
+
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(data) => {
+                             // println!("Poll Data: {:?}", data); // Verbose, maybe comment out later
+                             if data["code"].as_i64().unwrap_or(0) == 10000 {
+                                 let status = data["data"]["status"].as_str().unwrap_or("unknown");
+                                 println!("Poll Status: {}", status);
+                                 if status == "done" || status == "success" {
+                                     let video_url = data["data"]["video_url"].as_str().unwrap_or("").to_string();
+                                     return Ok(VideoResponse {
+                                         video_url,
+                                         thumbnail_url: None, 
+                                         generation_id: task_id,
+                                         duration_seconds: request.config.duration_seconds,
+                                         cost_estimate,
+                                         status: VideoStatus::Completed,
+                                     });
+                                 } else if status == "failed" || status == "error" {
+                                      return Err(anyhow::anyhow!("Generation failed: status={}", status));
+                                 }
+                             }
+                        },
+                        Err(e) => println!("Poll JSON parse error: {}", e),
+                    }
+                },
+                Err(e) => println!("Poll Request error: {}", e),
+            }
+        }
     }
 
     async fn generate_with_alibaba(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
@@ -429,14 +627,26 @@ impl VideoGenerator {
         })
     }
 
-    async fn generate_with_tencent(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    async fn generate_with_tencent(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // 腾讯混元视频生成实现
         todo!("Tencent Hunyuan implementation pending")
     }
 
-    async fn generate_with_huggingface(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    async fn generate_with_huggingface(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Hugging Face video generation implementation
         todo!("HuggingFace implementation pending")
+    }
+
+    async fn generate_with_local(&self, request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+        // Local generation would invoke python script or internal model
+        Ok(VideoResponse {
+            video_url: "placeholder_local_url.mp4".to_string(),
+            thumbnail_url: None,
+            generation_id: format!("local_{}", chrono::Utc::now().timestamp()),
+            duration_seconds: request.config.duration_seconds,
+            cost_estimate: 0.0,
+            status: VideoStatus::Completed, // Mocking for now as we don't have the full local pipeline yet
+        })
     }
 
     fn get_openrouter_model_name(&self, model: &VideoModel) -> &str {
@@ -479,4 +689,90 @@ impl Default for VideoGenerator {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// Helper functions for Volcengine Signature
+fn volc_hmac_sha256(key: &[u8], data: &str) -> Vec<u8> {
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(data.as_bytes());
+    mac.finalize().into_bytes().to_vec()
+}
+
+fn volc_sha256(data: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn sign_volc_request(
+    access_key_id: &str,
+    secret_access_key: &str,
+    method: &str,
+    path: &str,
+    query: &str,
+    headers: &BTreeMap<String, String>,
+    payload: &str,
+    region: &str,
+    service: &str,
+    date_iso: &str, // YYYYMMDDTHHMMSSZ
+) -> String {
+    let date_short = &date_iso[0..8]; // YYYYMMDD
+
+    // 1. Canonical Param Strings
+    // Headers need to be lowercased and sorted
+    let mut sorted_headers = BTreeMap::new();
+    for (k, v) in headers {
+        sorted_headers.insert(k.to_lowercase(), v.trim().to_string());
+    }
+
+    let signed_headers_str = sorted_headers.keys()
+        .map(|k| k.as_str())
+        .collect::<Vec<&str>>()
+        .join(";");
+
+    let mut canonical_headers_str = String::new();
+    for (k, v) in &sorted_headers {
+        canonical_headers_str.push_str(&format!("{}:{}\n", k, v));
+    }
+
+    let payload_hash = volc_sha256(payload);
+    
+    // 2. Canonical Request
+    let canonical_request = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}",
+        method,
+        path,
+        query,
+        canonical_headers_str,
+        signed_headers_str,
+        payload_hash
+    );
+
+    // 3. String to Sign
+    let credential_scope = format!("{}/{}/{}/request", date_short, region, service);
+    let string_to_sign = format!(
+        "HMAC-SHA256\n{}\n{}\n{}",
+        date_iso,
+        credential_scope,
+        volc_sha256(&canonical_request)
+    );
+
+    // 4. Calculate Signature
+    // kSecret = Secret Access Key
+    // kDate = HMAC(kSecret, Date)
+    // kRegion = HMAC(kDate, Region)
+    // kService = HMAC(kRegion, Service)
+    // kSigning = HMAC(kService, "request")
+    let k_date = volc_hmac_sha256(secret_access_key.as_bytes(), date_short);
+    let k_region = volc_hmac_sha256(&k_date, region);
+    let k_service = volc_hmac_sha256(&k_region, service);
+    let k_signing = volc_hmac_sha256(&k_service, "request");
+    let signature = hex::encode(volc_hmac_sha256(&k_signing, &string_to_sign));
+
+    // 5. Build Authorization Header
+    format!(
+        "HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
+        access_key_id, credential_scope, signed_headers_str, signature
+    )
 }

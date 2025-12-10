@@ -22,6 +22,16 @@ const FAVICON: Asset = asset!("/assets/favicon.ico");
 
 /// Main function that launches the Dioxus application
 fn main() {
+    #[cfg(feature = "server")]
+    {
+        println!("Server starting...");
+        // Load .env file if it exists
+        if let Err(e) = dotenv::dotenv() {
+            println!("Note: .env file not found or could not be loaded: {}", e);
+        } else {
+            println!(".env loaded");
+        }
+    }
     dioxus::launch(App);
 }
 

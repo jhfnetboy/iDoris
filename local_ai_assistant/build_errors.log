@@ -1,0 +1,382 @@
+warning: unused manifest key: build
+warning: unused manifest key: target.x86_64-apple-darwin.rustflags
+    Checking local_ai_assistant v0.1.0 (/Volumes/UltraDisk/Dev2/crypto-projects/iDoris/local_ai_assistant)
+error[E0252]: the name `Arc` is defined multiple times
+  --> src/server_functions/server_video_gen.rs:89:5
+   |
+4  | use std::sync::Arc;
+   |     -------------- previous import of the type `Arc` here
+...
+89 | use std::sync::Arc; // Changed from tokio::sync::Mutex to std::sync::Mutex in prompt, but tokio::sync::Mutex is needed for async. Reverti...
+   |     ^^^^^^^^^^^^^^ `Arc` reimported here
+   |
+   = note: `Arc` must be defined only once in the type namespace of this module
+
+error[E0252]: the name `Mutex` is defined multiple times
+  --> src/server_functions/server_video_gen.rs:91:5
+   |
+6  | use tokio::sync::Mutex;
+   |     ------------------ previous import of the type `Mutex` here
+...
+91 | use tokio::sync::Mutex;
+   |     ^^^^^^^^^^^^^^^^^^ `Mutex` reimported here
+   |
+   = note: `Mutex` must be defined only once in the type namespace of this module
+
+warning: unused import: `ChatRole`
+ --> src/components/chat.rs:7:34
+  |
+7 | use crate::models::{ChatMessage, ChatRole, Session, AppSettings};
+  |                                  ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `ensure_model_cached`, `get_image_gen_status`, and `init_hf_cache`
+ --> src/components/settings_page.rs:7:45
+  |
+7 |     is_image_model_ready, init_image_model, get_image_gen_status,
+  |                                             ^^^^^^^^^^^^^^^^^^^^
+8 |     list_cached_models, download_model, ensure_model_cached, init_hf_cache,
+  |                                         ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `ImageGenStatus`
+ --> src/components/image_gen.rs:7:78
+  |
+7 |     generate_image, is_image_model_ready, get_image_gen_status, ImageResult, ImageGenStatus
+  |                                                                              ^^^^^^^^^^^^^^
+
+warning: unused import: `VideoConfig`
+ --> src/components/video_gen.rs:6:48
+  |
+6 | use crate::models::{VideoProvider, VideoModel, VideoConfig, VideoQuality};
+  |                                                ^^^^^^^^^^^
+
+warning: unused import: `settings::SettingsPanel`
+  --> src/components/mod.rs:19:9
+   |
+19 | pub use settings::SettingsPanel;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ArticleTemplate`, `EditorContent`, `EditorSection`, `Platform`, `TemplateSection`, `WritingStyle`, and `get_builtin_templates`
+  --> src/models/mod.rs:17:5
+   |
+17 |     ArticleTemplate, EditorContent, EditorSection, Platform,
+   |     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^
+18 |     WritingStyle, TemplateSection, get_builtin_templates,
+   |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `kalosm::language::LlamaSource`
+  --> src/core/llm.rs:63:9
+   |
+63 |     use kalosm::language::LlamaSource;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> src/core/model_manager.rs:10:13
+   |
+10 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `ModelType`
+  --> src/core/model_manager.rs:12:32
+   |
+12 | use crate::models::{ModelInfo, ModelType, CacheInfo, get_available_models};
+   |                                ^^^^^^^^^
+
+warning: unused import: `TimeZone`
+  --> src/storage/database.rs:10:29
+   |
+10 | use chrono::{DateTime, Utc, TimeZone};
+   |                             ^^^^^^^^
+
+warning: unused import: `lazy_static::lazy_static`
+  --> src/server_functions/server_video_gen.rs:87:5
+   |
+87 | use lazy_static::lazy_static;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src/server_functions/server_video_gen.rs:89:5
+   |
+89 | use std::sync::Arc; // Changed from tokio::sync::Mutex to std::sync::Mutex in prompt, but tokio::sync::Mutex is needed for async. Reverti...
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `tokio::sync::Mutex`
+  --> src/server_functions/server_video_gen.rs:91:5
+   |
+91 | use tokio::sync::Mutex;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:213:5
+    |
+213 |     mut models: Signal<Vec<ModelInfo>>,
+    |     ----^^^^^^
+    |     |
+    |     help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:214:5
+    |
+214 |     mut cache_info: Signal<CacheInfo>,
+    |     ----^^^^^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:237:5
+    |
+237 |     mut models: Signal<Vec<ModelInfo>>,
+    |     ----^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/model_manager.rs:238:5
+    |
+238 |     mut cache_info: Signal<CacheInfo>,
+    |     ----^^^^^^^^^^
+    |     |
+    |     help: remove this `mut`
+
+warning: unused variable: `request`
+   --> src/core/video_gen.rs:325:44
+    |
+325 |     async fn generate_with_together(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                            ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `cost_estimate`
+   --> src/core/video_gen.rs:325:67
+    |
+325 |     async fn generate_with_together(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                                                   ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cost_estimate`
+
+warning: unused variable: `request`
+   --> src/core/video_gen.rs:330:45
+    |
+330 |     async fn generate_with_replicate(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `cost_estimate`
+   --> src/core/video_gen.rs:330:68
+    |
+330 |     async fn generate_with_replicate(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                                                    ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cost_estimate`
+
+warning: unused variable: `request`
+   --> src/core/video_gen.rs:457:43
+    |
+457 |     async fn generate_with_tencent(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                           ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `cost_estimate`
+   --> src/core/video_gen.rs:457:66
+    |
+457 |     async fn generate_with_tencent(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                                                  ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cost_estimate`
+
+warning: unused variable: `request`
+   --> src/core/video_gen.rs:462:47
+    |
+462 |     async fn generate_with_huggingface(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `cost_estimate`
+   --> src/core/video_gen.rs:462:70
+    |
+462 |     async fn generate_with_huggingface(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                                                      ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cost_estimate`
+
+warning: unused variable: `cost_estimate`
+   --> src/core/video_gen.rs:467:64
+    |
+467 |     async fn generate_with_local(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
+    |                                                                ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cost_estimate`
+
+error[E0277]: `Vec<ModelInfo>` is not a future
+   --> src/server_functions/server_video_gen.rs:242:73
+    |
+242 |         if let Ok(local_models) = crate::models::get_available_models().await {
+    |                                   ------------------------------------- ^^^^^ `Vec<ModelInfo>` is not a future
+    |                                   |
+    |                                   this call returns `Vec<ModelInfo>`
+    |
+    = help: the trait `futures::Future` is not implemented for `Vec<ModelInfo>`
+    = note: Vec<ModelInfo> must be a future or must implement `IntoFuture` to be awaited
+    = note: required for `Vec<ModelInfo>` to implement `std::future::IntoFuture`
+help: remove the `.await`
+    |
+242 -         if let Ok(local_models) = crate::models::get_available_models().await {
+242 +         if let Ok(local_models) = crate::models::get_available_models() {
+    |
+help: alternatively, consider making `fn get_available_models` asynchronous
+   --> src/models/model_info.rs:89:4
+    |
+89  | pub async fn get_available_models() -> Vec<ModelInfo> {
+    |     +++++
+
+warning: variable does not need to be mutable
+  --> src/components/chat.rs:33:9
+   |
+33 |     let mut state = use_signal(|| ChatState {
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:667:21
+    |
+667 |                 Err(e) => {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: variable `chunk_count` is assigned to, but never used
+   --> src/components/chat.rs:693:25
+    |
+693 |                 let mut chunk_count = 0;
+    |                         ^^^^^^^^^^^
+    |
+    = note: consider using `_chunk_count` instead
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:713:29
+    |
+713 |                         Err(e) => {
+    |                             ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `e`
+   --> src/components/chat.rs:723:17
+    |
+723 |             Err(e) => {
+    |                 ^ help: if this is intentional, prefix it with an underscore: `_e`
+
+warning: unused variable: `download_progress`
+   --> src/components/settings_page.rs:178:13
+    |
+178 |     let mut download_progress: Signal<u8> = use_signal(|| 0);
+    |             ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_download_progress`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:178:9
+    |
+178 |     let mut download_progress: Signal<u8> = use_signal(|| 0);
+    |         ----^^^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:182:9
+    |
+182 |     let mut models: Signal<Vec<ModelInfo>> = use_signal(|| Vec::new());
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:183:9
+    |
+183 |     let mut llm_downloading: Signal<bool> = use_signal(|| false);
+    |         ----^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/settings_page.rs:184:9
+    |
+184 |     let mut llm_status: Signal<String> = use_signal(|| "Checking models...".to_string());
+    |         ----^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:25:9
+   |
+25 |     let mut templates = use_signal(|| get_builtin_templates());
+   |         ----^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:47:9
+   |
+47 |     let mut handle_fetch_rss = move |_| {
+   |         ----^^^^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/content_editor.rs:72:9
+   |
+72 |     let mut handle_extract_article = move |_| {
+   |         ----^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/components/content_editor.rs:102:9
+    |
+102 |     let mut handle_generate_outline = move |_| {
+    |         ----^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `props`
+  --> src/components/video_gen.rs:14:22
+   |
+14 | pub fn VideoGenPanel(props: VideoGenPanelProps) -> Element {
+   |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_props`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:13:9
+   |
+13 |     let mut models = use_signal(Vec::<ModelInfo>::new);
+   |         ----^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:14:9
+   |
+14 |     let mut cache_info = use_signal(|| CacheInfo {
+   |         ----^^^^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/components/model_manager.rs:19:9
+   |
+19 |     let mut loading = use_signal(|| false);
+   |         ----^^^^^^^
+   |         |
+   |         help: remove this `mut`
+
+warning: unreachable pattern
+   --> src/core/video_gen.rs:150:13
+    |
+150 |             _ => 0.02, // Default to 2 cents per second
+    |             ^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> src/core/video_gen.rs:150:13
+    |
+90  |             (VideoModel::StableVideoDiffusion, VideoQuality::Standard) => 0.01,
+    |             ---------------------------------------------------------- matches some of the same values
+91  |             (VideoModel::StableVideoDiffusion, VideoQuality::HD) => 0.02,
+    |             ---------------------------------------------------- matches some of the same values
+92  |             (VideoModel::StableVideoDiffusion, VideoQuality::Premium) => 0.03,
+    |             --------------------------------------------------------- matches some of the same values
+93  |
+94  |             (VideoModel::Pika2, VideoQuality::Standard) => 0.02,
+    |             ------------------------------------------- matches some of the same values
+...
+150 |             _ => 0.02, // Default to 2 cents per second
+    |             ^ ...and 32 other patterns collectively make this unreachable
+    = note: `#[warn(unreachable_patterns)]` on by default
+
+Some errors have detailed explanations: E0252, E0277.
+For more information about an error, try `rustc --explain E0252`.
+warning: `local_ai_assistant` (bin "local_ai_assistant") generated 45 warnings
+error: could not compile `local_ai_assistant` (bin "local_ai_assistant") due to 3 previous errors; 45 warnings emitted

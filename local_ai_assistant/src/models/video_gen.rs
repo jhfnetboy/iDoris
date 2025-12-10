@@ -15,6 +15,7 @@ pub enum VideoProvider {
     Alibaba,      // 阿里通义
     Baidu,        // 百度
     Tencent,      // 腾讯混元
+    Local,        // Local Machine
 }
 
 // Video generation models
@@ -49,6 +50,9 @@ pub enum VideoModel {
 
     // Tencent models
     HunyuanVideo,   // 混元视频
+
+    // Local
+    LocalVideo,
 }
 
 // Video quality settings
