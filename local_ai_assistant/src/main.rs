@@ -29,7 +29,13 @@ fn main() {
         if let Err(e) = dotenv::dotenv() {
             println!("Note: .env file not found or could not be loaded: {}", e);
         } else {
-            println!(".env loaded");
+            println!("✅ .env loaded");
+        }
+        
+        // Validate configuration
+        if let Err(e) = core::config::validate_env_config() {
+            eprintln!("❌ Configuration validation failed: {}", e);
+            eprintln!("   The application will continue, but some features may not work.");
         }
     }
     dioxus::launch(App);
