@@ -44,7 +44,6 @@ readability = { version = "0.3", optional = true }
 
 # Phase 2.5 Video Generation
 lazy_static = { version = "1.5", optional = true }
-tokio-util = { version = "0.7", optional = true }
 sha2 = { version = "0.10", optional = true }
 hmac = { version = "0.12", optional = true }
 hex = { version = "0.4", optional = true }
@@ -55,7 +54,7 @@ default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "tokio/process", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability", "dep:lazy_static", "dep:tokio-util", "dep:sha2", "dep:hmac", "dep:hex", "dep:dotenv"]
+server = ["dioxus/server", "tokio/process", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability", "dep:lazy_static", "dep:sha2", "dep:hmac", "dep:hex", "dep:dotenv"]
 
 [profile.wasm-dev]
 inherits = "dev"
@@ -67,8 +66,5 @@ inherits = "dev"
 [profile.android-dev]
 inherits = "dev"
 
-[build]
-rustflags = ["-C", "target-cpu=native"]
-
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "target-feature=-avx,-avx2"]
+# Build configuration moved to .cargo/config.toml if needed
+# Removed unused manifest keys that were causing warnings

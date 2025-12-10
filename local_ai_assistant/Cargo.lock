@@ -5865,7 +5865,6 @@ dependencies = [
  "sha2",
  "surrealdb",
  "tokio",
- "tokio-util",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
