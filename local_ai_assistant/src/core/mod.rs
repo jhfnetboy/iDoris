@@ -2,6 +2,8 @@
 //!
 //! Low-level services for LLM inference, embedding, vector storage, image generation, TTS, video generation, and content sources.
 
+pub mod error;
+pub mod config;
 pub mod llm;
 pub mod embedding;
 pub mod vector_store;
