@@ -82,10 +82,6 @@ pub struct VideoTaskStatus {
     pub error: Option<String>,
 }
 
-// Enable actual video generation only under
-#[cfg(feature = "server")]
-use lazy_static::lazy_static;
-
 #[cfg(feature = "server")]
 lazy_static::lazy_static! {
     static ref VIDEO_GENERATOR: Arc<Mutex<VideoGenerator>> = Arc::new(Mutex::new(VideoGenerator::new()));

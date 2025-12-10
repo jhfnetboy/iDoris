@@ -60,8 +60,6 @@ pub async fn init_chat_model_with_id(model_id: &str) -> Result<(), String> {
 
 /// Internal function to load a model
 async fn load_model(model_id: &str) -> Result<(), String> {
-    use kalosm::language::LlamaSource;
-
     println!("Initializing chat model: {}...", model_id);
 
     // Convert model_id to HuggingFace format if needed

@@ -7,9 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::fs;
 use tokio::process::Command as AsyncCommand;
-use serde::{Deserialize, Serialize};
 use anyhow::{Result, Context};
-use crate::models::{ModelInfo, ModelType, CacheInfo, get_available_models};
+use crate::models::{ModelInfo, CacheInfo, get_available_models};
 
 /// Model Manager for handling HuggingFace models
 pub struct ModelManager {

@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use anyhow::Result;
 use rusqlite::Connection;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc};
 
 use crate::models::{Session, ChatMessage, ChatRole};
 
