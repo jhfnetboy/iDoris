@@ -39,6 +39,10 @@ fn App() -> Element {
         document::Title { "iDoris | Your Local AI Assistant" }
         // Use Tailwind CDN for complete class support
         script { src: "https://cdn.tailwindcss.com" }
+        // Also set title via script for better compatibility
+        script {
+            "document.title = 'iDoris | Your Local AI Assistant';"
+        }
         body {
             class: "bg-slate-900 text-white",
             components::App {}
