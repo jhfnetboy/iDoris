@@ -44,13 +44,16 @@ readability = { version = "0.3", optional = true }
 # Phase 2.5 Video Generation
 lazy_static = { version = "1.5", optional = true }
 tokio-util = { version = "0.7", optional = true }
+sha2 = { version = "0.10", optional = true }
+hmac = { version = "0.12", optional = true }
+hex = { version = "0.4", optional = true }
 
 [features]
 default = []
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability", "dep:lazy_static", "dep:tokio-util"]
+server = ["dioxus/server", "dep:kalosm", "dep:surrealdb", "dep:rusqlite", "dep:scopeguard", "dep:once_cell", "dep:image", "dep:base64", "dep:dirs", "dep:feed-rs", "dep:reqwest", "dep:readability", "dep:lazy_static", "dep:tokio-util", "dep:sha2", "dep:hmac", "dep:hex"]
 
 [profile.wasm-dev]
 inherits = "dev"
