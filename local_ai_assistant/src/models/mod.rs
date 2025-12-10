@@ -13,10 +13,11 @@ pub use session::Session;
 pub use document::Document;
 pub use settings::{AppSettings, ResponseLanguage, Theme, FontSize};
 pub use model_info::{ModelInfo, ModelStatus, ModelType, CacheInfo, get_available_models};
-pub use content_template::{
-    ArticleTemplate, EditorContent, EditorSection, Platform,
-    WritingStyle, TemplateSection, get_builtin_templates,
-};
+// Commented out unused template exports - will be used in Phase 3.2
+// pub use content_template::{
+//     ArticleTemplate, EditorContent, EditorSection, Platform,
+//     WritingStyle, TemplateSection, get_builtin_templates,
+// };
 pub use video_gen::{
     VideoProvider, VideoModel, VideoConfig, VideoQuality,
 };

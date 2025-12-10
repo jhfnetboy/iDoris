@@ -332,12 +332,12 @@ impl VideoGenerator {
 
     async fn generate_with_together(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Implementation for Together.ai
-        todo!("Together.ai implementation pending")
+        Err(anyhow::anyhow!("Together.ai video generation not yet implemented. Please use ByteDance, Alibaba, or Baidu providers."))
     }
 
     async fn generate_with_replicate(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Implementation for Replicate
-        todo!("Replicate implementation pending")
+        Err(anyhow::anyhow!("Replicate video generation not yet implemented. Please use ByteDance, Alibaba, or Baidu providers."))
     }
 
     async fn generate_with_bytedance(&self, request: VideoRequest, cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
@@ -629,12 +629,12 @@ impl VideoGenerator {
 
     async fn generate_with_tencent(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // 腾讯混元视频生成实现
-        todo!("Tencent Hunyuan implementation pending")
+        Err(anyhow::anyhow!("Tencent Hunyuan video generation not yet implemented. Please use ByteDance provider for best results."))
     }
 
     async fn generate_with_huggingface(&self, _request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {
         // Hugging Face video generation implementation
-        todo!("HuggingFace implementation pending")
+        Err(anyhow::anyhow!("HuggingFace video generation not yet implemented. Use Local models or ByteDance provider instead."))
     }
 
     async fn generate_with_local(&self, request: VideoRequest, _cost_estimate: f64) -> Result<VideoResponse, anyhow::Error> {

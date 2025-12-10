@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 use dioxus::html::input_data::keyboard_types::Key;
-use crate::models::{ChatMessage, ChatRole, Session, AppSettings};
+use crate::models::{ChatMessage, Session, AppSettings};
 use crate::server_functions::{get_response, reset_chat, search_context, init_llm_model, init_embedding_model, init_db, init_sqlite_db, create_session, save_message, update_session_title, get_sessions};
 use super::Message;
 

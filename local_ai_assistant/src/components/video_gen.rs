@@ -3,7 +3,8 @@ use crate::server_functions::{
     VideoGenForm, VideoResponse, VideoProviderInfo,
     get_available_video_providers, estimate_video_cost, generate_video
 };
-use crate::models::{VideoProvider, VideoModel, VideoConfig, VideoQuality};
+use crate::models::{VideoProvider, VideoModel, VideoQuality};
+use js_sys::eval;
 
 #[derive(Clone, PartialEq, Props)]
 pub struct VideoGenPanelProps {

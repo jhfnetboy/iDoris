@@ -4,8 +4,8 @@ use dioxus::prelude::*;
 use crate::models::{AppSettings, ResponseLanguage, Theme, FontSize, ModelInfo, ModelType};
 use crate::server_functions::{
     list_context_files, add_context_document, delete_context_document, reload_context_database, ContextFile,
-    is_image_model_ready, init_image_model, get_image_gen_status,
-    list_cached_models, download_model, ensure_model_cached, init_hf_cache,
+    is_image_model_ready, init_image_model,
+    list_cached_models, download_model,
 };
 
 

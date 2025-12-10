@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 use crate::server_functions::{
-    generate_image, is_image_model_ready, get_image_gen_status, ImageResult, ImageGenStatus
+    generate_image, is_image_model_ready, get_image_gen_status, ImageResult
 };
 
 /// Props for ImageGenPanel - embedded mode means it's part of the main content area
