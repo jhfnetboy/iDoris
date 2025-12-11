@@ -23,3 +23,8 @@ pub use video_gen::{
     VideoProvider, VideoModel, VideoConfig, VideoQuality,
 };
 pub use blog_post::{BlogPost, BlogSection, HeadingLevel};
+pub mod content_package;
+pub use content_package::{
+    ContentPackage, Article, ArticleSection, ImageAsset, VideoClip,
+    SocialPlatform, SeoMetadata, ExportFormat, GenerationProgress, GenerationStage,
+};

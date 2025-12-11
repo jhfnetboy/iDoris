@@ -21,3 +21,9 @@ pub use image_gen::ImageGenPanel;
 pub use tts_panel::TtsPanel;
 pub use content_editor::ContentEditorPanel;
 pub use video_gen::VideoGenPanel;
+pub mod content_package;
+pub use content_package::ContentPackageGenerator;
+pub mod seo_panel;
+pub use seo_panel::SeoAnalyzerPanel;
+
+

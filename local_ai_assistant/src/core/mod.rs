@@ -22,3 +22,11 @@ pub mod video_gen;
 
 #[cfg(feature = "server")]
 pub mod content_source;
+
+#[cfg(feature = "server")]
+pub mod content_generator;
+
+#[cfg(feature = "server")]
+pub mod seo;
+
+
